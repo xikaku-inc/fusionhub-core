@@ -6,7 +6,7 @@ Open-source multi-sensor fusion framework written in Rust. FusionHub Core provid
 
 - **Plugin-based node registry** — Global registry with self-registration pattern; add new sources, filters, and sinks without modifying core code
 - **UI extension system** — Micro-frontend architecture for pluggable web UI pages
-- **Directed node graph** — Sources, filters, and sinks connected via ZMQ pub/sub with in-process or TCP transport
+- **Directed node graph** — Sources, filters, and sinks connected via Rust broadcast channels (in-process, zero-copy) or ZMQ pub/sub (TCP, for cross-process)
 - **Web-based control** — Embedded React UI with real-time dashboard, visual node editor, and live monitoring
 - **WebSocket API** — Real-time data streaming and remote command interface
 - **Hot-reload** — Restart the node graph without restarting the process
@@ -17,17 +17,17 @@ Open-source multi-sensor fusion framework written in Rust. FusionHub Core provid
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    FusionHub Core                         │
+│                    FusionHub Core                        │
 │                                                          │
 │    Sources          Filters             Sinks            │
-│  ┌──────────┐   ┌───────────────┐   ┌─────────────┐     │
-│  │ OpenZen  │   │ Prediction    │   │ WebSocket   │     │
-│  │ DTrack   │   │ InsideOut     │   │ MQTT        │     │
-│  │ NMEA     │-->│ Intercalib.   │-->│ FileLogger  │     │
-│  │ MQTT     │-->│ (+ any        │-->│ Echo        │     │
-│  │ CAN Bus  │   │  registered)  │   │ DTrack Out  │     │
-│  │ Serial   │   │               │   │ ROS2 / VRPN │     │
-│  └──────────┘   └───────────────┘   └─────────────┘     │
+│  ┌──────────┐   ┌───────────────┐   ┌─────────────┐      │
+│  │ Example  │   │ Example       │   │ Example     │      │
+│  │ Source   │   │ Filter        │   │ Sink        │      │
+│  │          │-->│               │-->│ DataMonitor │      │
+│  │ (+ any   │   │ (+ any        │   │             │      │
+│  │  custom) │   │  custom)      │   │ (+ any      │      │
+│  │          │   │               │   │  custom)    │      │
+│  └──────────┘   └───────────────┘   └─────────────┘      │
 │                                                          │
 │  ┌──────────────────┐  ┌──────────────────────────────┐  │
 │  │ WebSocket Server │  │ Web UI (Axum HTTP + SSE)     │  │
