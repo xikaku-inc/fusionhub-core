@@ -1,0 +1,21 @@
+[package]
+name = "web_ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+tower-http = { version = "0.6", features = ["compression-gzip"] }
+tokio = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
+crypto = { path = "../crypto" }
+fusion_types = { path = "../fusion_types" }
+fusion_registry = { path = "../fusion_registry" }
+websocket_server = { path = "../websocket_server" }
+reqwest = { version = "0.12", features = ["json"] }
+include_dir = "0.7"
+mime_guess = "2"

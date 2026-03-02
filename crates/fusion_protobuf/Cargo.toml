@@ -1,0 +1,12 @@
+[package]
+name = "fusion_protobuf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = { workspace = true }
+fusion_types = { path = "../fusion_types" }
+nalgebra = { workspace = true }
+
+[build-dependencies]
+prost-build = "0.13"

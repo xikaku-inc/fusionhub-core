@@ -1,0 +1,3 @@
+[submodule "external/susi"]
+	path = external/susi
+	url = https://github.com/Trilion99/susi.git

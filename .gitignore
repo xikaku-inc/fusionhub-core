@@ -1,0 +1,8 @@
+/target
+*.pem
+*.db
+license.json
+
+# Web UI
+crates/web_ui/frontend/node_modules/
+crates/web_ui/src/ui/dist/

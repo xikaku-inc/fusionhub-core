@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FusionHub Control</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/leaflet.css">
+    <script defer src="/js/alpine.min.js"></script>
+</head>
+<body x-data="fusionHubApp()" x-init="init()">
+
+<!-- Top bar -->
+<header class="app-bar">
+    <button class="nav-toggle" @click="sidebarOpen = !sidebarOpen">&#9776;</button>
+    <span class="app-title">FusionHub Control</span>
+    <span class="spacer"></span>
+    <span class="badge"
+          :class="{ connected: sse.connected, disconnected: !sse.connected }"
+          x-text="sse.connected ? 'Connected' : 'Disconnected'"></span>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar" :class="{ open: sidebarOpen }">
+    <div class="nav-section">
+        <div class="nav-title">Pages</div>
+        <a class="nav-item" :class="{ active: view === 'dashboard' }" @click="view = 'dashboard'">Dashboard</a>
+        <a class="nav-item" :class="{ active: view === 'config' }" @click="view = 'config'">Configuration</a>
+        <a class="nav-item" :class="{ active: view === 'calibration' }" @click="view = 'calibration'">Calibration</a>
+        <a class="nav-item" :class="{ active: view === '3dview' }" @click="switchTo3D()">3D View</a>
+        <a class="nav-item" :class="{ active: view === 'map' }" @click="switchToMap()">Map</a>
+        <a class="nav-item" :class="{ active: view === 'license' }" @click="view = 'license'">License</a>
+    </div>
+</nav>
+
+<!-- Main content -->
+<main class="content" :class="{ 'sidebar-open': sidebarOpen }">
+
+<!-- ==================== DASHBOARD ==================== -->
+<div x-show="view === 'dashboard'" x-cloak>
+    <div class="card">
+        <div class="card-title flex-row">
+            <span>Dashboard</span>
+            <span class="spacer"></span>
+            <span class="badge" :class="sse.connected ? 'connected' : 'disconnected'"
+                  x-text="sse.connected ? 'Connected' : 'Disconnected'" style="font-size:11px"></span>
+        </div>
+
+        <div class="card-body">
+            <h3>Node Activity</h3>
+            <div class="activity-grid">
+                <template x-for="ch in activityChannels()" :key="ch.key">
+                    <div class="activity-row">
+                        <span class="activity-dot" :class="ch.active ? 'active' : 'inactive'"></span>
+                        <span class="activity-name" x-text="ch.label"></span>
+                        <span class="activity-count" x-text="ch.count"></span>
+                        <span class="activity-rate" x-text="ch.rate"></span>
+                    </div>
+                </template>
+            </div>
+
+            <h3>GNSS</h3>
+            <table>
+                <tr>
+                    <td>Fix Quality</td>
+                    <td>
+                        <span class="badge" style="font-size:11px"
+                              :class="{ connected: status.inputStatus.gnssQuality === 4, connecting: status.inputStatus.gnssQuality > 0 && status.inputStatus.gnssQuality !== 4, disconnected: status.inputStatus.gnssQuality === 0 }"
+                              x-text="gnssQualityText(status.inputStatus.gnssQuality)"></span>
+                    </td>
+                </tr>
+            </table>
+
+            <h3>Fusion Status</h3>
+            <table>
+                <tr>
+                    <td>Motion</td>
+                    <td x-text="motionStatusText()"></td>
+                </tr>
+                <tr>
+                    <td>Gyro Autocalibration</td>
+                    <td x-text="status.status.autocalibrationStatus ? 'Calibrated' : 'Not calibrated'"></td>
+                </tr>
+                <tr x-show="status.status.autocalibrationStatus">
+                    <td>Time since calibration</td>
+                    <td x-text="formatDuration(status.status.autocalibrationDurationSinceLast)"></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== CONFIGURATION ==================== -->
+<div x-show="view === 'config'" x-cloak>
+    <div class="card">
+        <div class="card-title">Configuration</div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+            <div class="button-row">
+                <button @click="refreshConfig()">Refresh</button>
+                <button @click="setConfigFromEditor()">Set</button>
+                <button @click="saveConfig()">Save</button>
+            </div>
+            <textarea class="json-editor"
+                      x-model="configText"
+                      spellcheck="false"></textarea>
+            <div x-show="configError" class="error-text" x-text="configError"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== CALIBRATION ==================== -->
+<div x-show="view === 'calibration'" x-cloak>
+    <div class="card">
+        <div class="card-title">Calibration</div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+            <h3>Motion &amp; Gyroscope Autocalibration</h3>
+            <table>
+                <tr>
+                    <td>Status</td>
+                    <td x-text="status.status.autocalibrationStatus ? 'Calibrated' : 'Not calibrated'"></td>
+                </tr>
+                <tr>
+                    <td>Sensor Motion Status</td>
+                    <td x-text="motionStatusText()"></td>
+                </tr>
+                <tr>
+                    <td>Duration since last calibration</td>
+                    <td x-text="formatDuration(status.status.autocalibrationDurationSinceLast)"></td>
+                </tr>
+                <tr>
+                    <td>Calibration Value</td>
+                    <td x-text="formatCalibrationValue(status.status.autocalibrationValue)"></td>
+                </tr>
+            </table>
+
+            <div class="card-divider mt-16"></div>
+            <h3>Intercalibration</h3>
+
+            <div class="grid-2 mb-8" x-show="config && config.sources">
+                <div>
+                    <label class="data-label">Config Loaded</label>
+                    <span x-text="config ? 'True' : 'False'"></span>
+                </div>
+                <div>
+                    <label class="data-label">Sources Available</label>
+                    <span x-text="config?.sources ? 'True' : 'False'"></span>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <label class="data-label mb-8" style="display:block">Calibration Type</label>
+                <div class="select-wrapper">
+                    <select x-model="cal.type" @change="cal.firstSource = ''; cal.secondSource = ''">
+                        <option value="">Select Calibration Type</option>
+                        <option value="imuOptical">IMU-Optical Calibration</option>
+                        <option value="opticalOptical">Optical-Optical Calibration</option>
+                        <option value="handEye">Hand-Eye Calibration</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2 mb-8">
+                <div>
+                    <label class="data-label" style="display:block">First Source</label>
+                    <div class="select-wrapper">
+                        <select x-model="cal.firstSource">
+                            <option value="">Select First Source</option>
+                            <template x-for="src in getFirstSourceOptions()" :key="src.value">
+                                <option :value="JSON.stringify(src)" x-text="src.text"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="data-label" style="display:block">Second Source</label>
+                    <div class="select-wrapper">
+                        <select x-model="cal.secondSource">
+                            <option value="">Select Second Source</option>
+                            <template x-for="src in getSecondSourceOptions()" :key="src.value">
+                                <option :value="JSON.stringify(src)" x-text="src.text"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <table class="mb-8">
+                <tr>
+                    <td>Status</td>
+                    <td>
+                        <span x-show="cal.restarting">Restarting</span>
+                        <span x-show="!cal.restarting && status.intercalibrationStatus.isRunning">Running</span>
+                        <span x-show="!cal.restarting && !status.intercalibrationStatus.isRunning && status.intercalibrationStatus.finished">Finished</span>
+                        <span x-show="!cal.restarting && !status.intercalibrationStatus.isRunning && !status.intercalibrationStatus.finished">Idle</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Progress</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill"
+                                 :style="'width:' + calProgress() + '%'"
+                                 x-text="Math.ceil(calProgress()) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Resulting Pose</td>
+                    <td>
+                        <template x-if="cal.results.quat">
+                            <div>
+                                <table class="value-table">
+                                    <tr>
+                                        <td>Quaternion:</td>
+                                        <td>{ "w": <span x-text="cal.results.quat.w.toFixed(4)"></span>,
+                                              "x": <span x-text="cal.results.quat.x.toFixed(4)"></span>,
+                                              "y": <span x-text="cal.results.quat.y.toFixed(4)"></span>,
+                                              "z": <span x-text="cal.results.quat.z.toFixed(4)"></span> }</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Euler (deg):</td>
+                                        <td x-text="'Roll=' + quaternionToEuler(cal.results.quat).roll + ', Pitch=' + quaternionToEuler(cal.results.quat).pitch + ', Yaw=' + quaternionToEuler(cal.results.quat).yaw"></td>
+                                    </tr>
+                                    <template x-if="cal.results.trans">
+                                        <tr>
+                                            <td>Translation (m):</td>
+                                            <td>{ "x": <span x-text="cal.results.trans.x.toFixed(4)"></span>,
+                                                  "y": <span x-text="cal.results.trans.y.toFixed(4)"></span>,
+                                                  "z": <span x-text="cal.results.trans.z.toFixed(4)"></span> }</td>
+                                        </tr>
+                                    </template>
+                                </table>
+                            </div>
+                        </template>
+                        <template x-if="!cal.results.quat">
+                            <span>Not available</span>
+                        </template>
+                    </td>
+                </tr>
+            </table>
+
+            <button
+                :class="status.intercalibrationStatus.isRunning ? 'danger' : ''"
+                :disabled="!status.intercalibrationStatus.isRunning && (!cal.firstSource || !cal.secondSource)"
+                @click="status.intercalibrationStatus.isRunning ? cleanupIntercalibration() : startIntercalibration()"
+                style="width:100%"
+                x-text="status.intercalibrationStatus.isRunning ? 'Stop Intercalibration' : 'Start Intercalibration'">
+            </button>
+
+            <button
+                class="mt-8"
+                :disabled="!cal.results.quat"
+                @click="applyIntercalibrationResult()"
+                style="width:100%; margin-top:8px">
+                Apply Intercalibration Result
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 3D VIEW ==================== -->
+<div x-show="view === '3dview'" x-cloak>
+    <div class="card">
+        <div class="card-title">3D Viewer</div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+            <div class="button-row">
+                <button @click="resetCamera()">Reset View</button>
+            </div>
+            <div class="flex-row mb-8">
+                <label class="checkbox"><input type="checkbox" x-model="td.showFusion"> Show Fusion Cube (red)</label>
+                <label class="checkbox"><input type="checkbox" x-model="td.showOptical"> Show Optical Cube (white)</label>
+                <label class="checkbox"><input type="checkbox" x-model="td.updatePos"> Update Position</label>
+            </div>
+            <div x-ref="threeCanvas" class="three-container"></div>
+
+            <details class="mt-8">
+                <summary>Data Output</summary>
+                <div style="padding:12px">
+                    <div class="grid-2">
+                        <div class="data-panel">
+                            <h3>Fusion Output</h3>
+                            <template x-if="status.fusedPose && status.fusedPose.position">
+                                <div class="grid-3">
+                                    <div>
+                                        <p class="data-label">Position</p>
+                                        <p>x: <span x-text="fmt(status.fusedPose.position.x)"></span></p>
+                                        <p>y: <span x-text="fmt(status.fusedPose.position.y)"></span></p>
+                                        <p>z: <span x-text="fmt(status.fusedPose.position.z)"></span></p>
+                                    </div>
+                                    <div>
+                                        <p class="data-label">Orientation</p>
+                                        <p>w: <span x-text="fmt(status.fusedPose.orientation.w)"></span></p>
+                                        <p>x: <span x-text="fmt(status.fusedPose.orientation.x)"></span></p>
+                                        <p>y: <span x-text="fmt(status.fusedPose.orientation.y)"></span></p>
+                                        <p>z: <span x-text="fmt(status.fusedPose.orientation.z)"></span></p>
+                                    </div>
+                                    <div>
+                                        <p class="data-label">Euler</p>
+                                        <p>x: <span x-text="fmt(calcEuler(status.fusedPose.orientation).x)"></span></p>
+                                        <p>y: <span x-text="fmt(calcEuler(status.fusedPose.orientation).y)"></span></p>
+                                        <p>z: <span x-text="fmt(calcEuler(status.fusedPose.orientation).z)"></span></p>
+                                    </div>
+                                </div>
+                            </template>
+                            <p x-show="!status.fusedPose || !status.fusedPose.position" style="color:var(--text2)">No fusion data available</p>
+                        </div>
+                        <div class="data-panel">
+                            <h3>Optical Output</h3>
+                            <template x-if="status.opticalData && status.opticalData.position">
+                                <div class="grid-3">
+                                    <div>
+                                        <p class="data-label">Position</p>
+                                        <p>x: <span x-text="fmt(status.opticalData.position.x)"></span></p>
+                                        <p>y: <span x-text="fmt(status.opticalData.position.y)"></span></p>
+                                        <p>z: <span x-text="fmt(status.opticalData.position.z)"></span></p>
+                                    </div>
+                                    <div>
+                                        <p class="data-label">Orientation</p>
+                                        <p>w: <span x-text="fmt(status.opticalData.orientation.w)"></span></p>
+                                        <p>x: <span x-text="fmt(status.opticalData.orientation.x)"></span></p>
+                                        <p>y: <span x-text="fmt(status.opticalData.orientation.y)"></span></p>
+                                        <p>z: <span x-text="fmt(status.opticalData.orientation.z)"></span></p>
+                                    </div>
+                                    <div>
+                                        <p class="data-label">Euler</p>
+                                        <p>x: <span x-text="fmt(calcEuler(status.opticalData.orientation).x)"></span></p>
+                                        <p>y: <span x-text="fmt(calcEuler(status.opticalData.orientation).y)"></span></p>
+                                        <p>z: <span x-text="fmt(calcEuler(status.opticalData.orientation).z)"></span></p>
+                                    </div>
+                                </div>
+                            </template>
+                            <p x-show="!status.opticalData || !status.opticalData.position" style="color:var(--text2)">No optical data available</p>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== MAP VIEW ==================== -->
+<div x-show="view === 'map'" x-cloak>
+    <div class="card">
+        <div class="card-title">Map View</div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+            <div style="position:relative">
+                <div class="map-overlay">
+                    <span x-text="mapTimestamp()"></span><br>
+                    RTK status: <span x-text="gnssQualityText(mapData.rtkStatus)"></span><br>
+                    Heading: <span x-text="mapData.heading.toFixed(2)"></span>&deg;
+                </div>
+                <div x-ref="mapContainer" class="map-container"></div>
+            </div>
+            <div class="button-row mt-8">
+                <button @click="clearMapPath()" style="flex:1">Clear Path</button>
+                <button @click="mapData.follow = !mapData.follow" style="flex:1"
+                        x-text="mapData.follow ? 'Following' : 'Not Following'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== LICENSE ==================== -->
+<div x-show="view === 'license'" x-cloak>
+    <div class="card">
+        <div class="card-title" style="display:flex;align-items:center">
+            <span>License</span>
+            <span class="spacer"></span>
+            <span class="badge" style="font-size:11px"
+                  :class="licenseStatusBadgeClass()"
+                  x-text="licenseStatusText()"></span>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+            <table>
+                <tr><td style="width:140px">Status</td><td x-text="licenseStatusText()"></td></tr>
+                <tr><td>Product</td><td x-text="license.info.product || '-'"></td></tr>
+                <tr><td>Customer</td><td x-text="license.info.customer || '-'"></td></tr>
+                <tr><td>Features</td><td x-text="license.info.features.length ? license.info.features.join(', ') : '-'"></td></tr>
+                <tr><td>Expires</td><td x-text="formatExpiry(license.info.expires)"></td></tr>
+                <tr x-show="license.info.lease_expires"><td>Lease Expires</td><td x-text="formatExpiry(license.info.lease_expires)"></td></tr>
+                <tr><td>Machine Code</td><td style="font-family:monospace;font-size:11px;word-break:break-all" x-text="license.info.machine_code || '-'"></td></tr>
+                <tr x-show="license.info.error"><td>Error</td><td class="log-error" x-text="license.info.error"></td></tr>
+            </table>
+
+            <div class="card-divider" style="margin:16px 0"></div>
+
+            <div class="mb-8">
+                <span class="data-label" style="display:block;margin-bottom:4px">Activation Method</span>
+                <div class="select-wrapper">
+                    <select x-model="license.method">
+                        <option value="file">License File (Offline)</option>
+                        <option value="server">License Server (Online)</option>
+                        <option value="token">USB Hardware Token</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- File mode -->
+            <div x-show="license.method === 'file'" class="flex-col">
+                <div>
+                    <span class="data-label" style="display:block;margin-bottom:4px">License File Path</span>
+                    <input type="text" x-model="license.licenseFile" placeholder="license.json" style="width:100%">
+                </div>
+                <div class="flex-row">
+                    <button @click="checkLicenseFile()" :disabled="license.loading">Verify</button>
+                    <label style="cursor:pointer">
+                        <button class="secondary" onclick="this.nextElementSibling.click()" :disabled="license.loading">Upload File</button>
+                        <input type="file" accept=".json" @change="uploadLicense($event)" style="display:none">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Server mode -->
+            <div x-show="license.method === 'server'" class="flex-col">
+                <div>
+                    <span class="data-label" style="display:block;margin-bottom:4px">License Key</span>
+                    <input type="text" x-model="license.licenseKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" style="width:100%">
+                </div>
+                <div>
+                    <span class="data-label" style="display:block;margin-bottom:4px">Server URL</span>
+                    <input type="text" x-model="license.serverUrl" placeholder="https://license.example.com" style="width:100%">
+                </div>
+                <div>
+                    <span class="data-label" style="display:block;margin-bottom:4px">Local License File</span>
+                    <input type="text" x-model="license.licenseFile" placeholder="license.json" style="width:100%">
+                </div>
+                <div>
+                    <button @click="checkLicenseServer()" :disabled="license.loading">Activate</button>
+                </div>
+            </div>
+
+            <!-- Token mode -->
+            <div x-show="license.method === 'token'" class="flex-col">
+                <p style="color:var(--text2);font-size:13px;margin:0">
+                    Insert a USB hardware token and click Scan to detect it.
+                </p>
+                <div>
+                    <button @click="checkLicenseToken()" :disabled="license.loading">Scan for Token</button>
+                </div>
+            </div>
+
+            <div x-show="license.message" style="margin-top:12px;font-size:13px"
+                 :class="license.messageType === 'success' ? 'log-success' : 'log-error'"
+                 x-text="license.message"></div>
+
+            <!-- Registered Machines (server mode only) -->
+            <template x-if="license.method === 'server' && license.licenseKey">
+                <div style="margin-top:16px">
+                    <div class="card-divider" style="margin-bottom:12px"></div>
+                    <div style="display:flex;align-items:center;margin-bottom:8px">
+                        <span class="data-label">Registered Machines</span>
+                        <span class="spacer"></span>
+                        <span x-show="license.machines.length" style="font-size:12px;color:var(--text2);margin-right:8px"
+                              x-text="license.machines.length + ' of ' + license.machinesMax + ' slots'"></span>
+                        <button class="secondary" style="font-size:12px;padding:2px 10px"
+                                @click="fetchMachines()" :disabled="license.machinesLoading">
+                            <span x-show="!license.machinesLoading">Refresh</span>
+                            <span x-show="license.machinesLoading">Loading...</span>
+                        </button>
+                    </div>
+                    <div x-show="license.machinesError" class="log-error" style="font-size:12px;margin-bottom:8px"
+                         x-text="license.machinesError"></div>
+                    <table x-show="license.machines.length" class="data-table" style="font-size:12px;width:100%">
+                        <thead>
+                            <tr>
+                                <th>Machine Code</th>
+                                <th>Name</th>
+                                <th>Lease Expires</th>
+                                <th>Active</th>
+                                <th style="width:70px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="m in license.machines" :key="m.machine_code">
+                                <tr :style="m.machine_code === license.info.machine_code ? 'background:var(--bg-hover)' : ''">
+                                    <td style="font-family:monospace;font-size:11px" x-text="m.machine_code.substring(0, 16) + '...'"></td>
+                                    <td x-text="m.friendly_name || '-'"></td>
+                                    <td x-text="m.lease_expires_at ? formatExpiry(m.lease_expires_at) : 'Perpetual'"></td>
+                                    <td><span class="badge" :class="m.lease_active ? 'connected' : 'disconnected'"
+                                              x-text="m.lease_active ? 'Active' : 'Expired'"></span></td>
+                                    <td style="white-space:nowrap">
+                                        <span x-show="m.machine_code === license.info.machine_code"
+                                              style="font-size:10px;color:var(--text2);margin-right:4px">This machine</span>
+                                        <button class="danger" style="font-size:11px;padding:1px 8px"
+                                                @click="deactivateMachine(m.machine_code, m.machine_code === license.info.machine_code)"
+                                                :disabled="license.machinesLoading">Remove</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <p x-show="!license.machines.length && !license.machinesLoading && !license.machinesError"
+                       style="font-size:12px;color:var(--text2);margin:0">
+                        Click Refresh to load registered machines from the license server.
+                    </p>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+</main>
+
+<!-- Load heavy libraries -->
+<script src="/js/three.min.js"></script>
+<script src="/js/TrackballControls.js"></script>
+<script src="/js/leaflet.min.js"></script>
+
+<script>
+function fusionHubApp() {
+    return {
+        // ---- UI state ----
+        view: 'dashboard',
+        sidebarOpen: true,
+        tooltip: '',
+
+        // ---- SSE state ----
+        sse: { source: null, connected: false },
+
+        // ---- Data state ----
+        config: {},
+        configText: '',
+        configError: '',
+        status: {
+            status: {
+                autocalibrationDurationSinceLast: 0,
+                autocalibrationStatus: false,
+                autocalibrationUpdated: false,
+                autocalibrationValue: null,
+                matcherStatus: { finished: false, nPoses: 0, nTotalPoses: [0,0], nUsedPoses: 0, quat: {w:1,x:0,y:0,z:0} },
+                nImu: 0, nOptical: 0, sensorMotionStatus: 0
+            },
+            inputStatus: { nImu: 0, nOptical: 0, nGnss: 0, nCan: 0, nRtcmData: 0, nVehicleSpeed: 0, gnssQuality: 0 },
+            intercalibrationStatus: { nPoses: 0, nTotalPoses: [0,0], nUsedPoses: 0, quat: null, trans: null, minNPoses: 0, finished: false, isRunning: false },
+            fusedPose: {},
+            fusedVehiclePose: {},
+            opticalData: {}
+        },
+
+        // ---- Calibration state ----
+        cal: {
+            type: '',
+            firstSource: '',
+            secondSource: '',
+            restarting: false,
+            results: { quat: null, trans: null }
+        },
+
+        // ---- 3D state ----
+        td: {
+            showFusion: true,
+            showOptical: true,
+            updatePos: false,
+            inited: false,
+            scene: null, camera: null, renderer: null, controls: null,
+            cubeFusion: null, cubeOptical: null, animId: null
+        },
+
+        // ---- License state ----
+        license: {
+            info: { valid: false, status: 'not_checked', customer: '', product: '', features: [], expires: null, lease_expires: null, machine_code: '', error: '' },
+            method: 'file',
+            licenseFile: 'license.json',
+            licenseKey: '',
+            serverUrl: 'http://3.114.50.38:3100/api/v1',
+            loading: false,
+            message: '',
+            messageType: '',
+            machines: [],
+            machinesMax: 0,
+            machinesLoading: false,
+            machinesError: ''
+        },
+
+        // ---- Map state ----
+        mapData: {
+            inited: false,
+            map: null,
+            marker: null,
+            polyline: null,
+            track: [],
+            follow: true,
+            centerInited: false,
+            heading: 0,
+            rtkStatus: 0,
+            rotAngle: 0,
+            timestamp: 0
+        },
+
+        // ---- Throttle timestamps ----
+        _lastFusedPose: 0,
+        _lastOptical: 0,
+        _lastVehiclePose: 0,
+
+        // ---- Activity tracking ----
+        _prevInputStatus: null,
+        _prevInputTime: 0,
+        _inputRates: { nImu: 0, nOptical: 0, nGnss: 0, nCan: 0, nRtcmData: 0, nVehicleSpeed: 0 },
+        _prevFusionStatus: null,
+        _prevFusionTime: 0,
+        _fusionRates: { nImu: 0, nOptical: 0 },
+        _activityTimeout: 3000,
+
+        // ==================================================================
+        // INIT
+        // ==================================================================
+        init() {
+            this.connectSSE();
+            this.refreshConfig();
+            this.fetchLicenseStatus();
+        },
+
+        // ==================================================================
+        // SSE
+        // ==================================================================
+        connectSSE() {
+            if (this.sse.source) {
+                this.sse.source.close();
+            }
+            const es = new EventSource('/api/events');
+            this.sse.source = es;
+
+            es.onopen = () => { this.sse.connected = true; };
+            es.onerror = () => { this.sse.connected = false; };
+
+            // Typed SSE events
+            es.addEventListener('config', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    this.config = data;
+                    this.configText = JSON.stringify(data, null, 4);
+                } catch(err) {}
+            });
+
+            es.addEventListener('status', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const now = Date.now();
+                    if (this._prevFusionStatus && this._prevFusionTime) {
+                        const dt = (now - this._prevFusionTime) / 1000;
+                        if (dt > 0.1) {
+                            for (const k of ['nImu', 'nOptical']) {
+                                const delta = (data[k] || 0) - (this._prevFusionStatus[k] || 0);
+                                this._fusionRates[k] = delta > 0 ? Math.round(delta / dt) : 0;
+                            }
+                        }
+                    }
+                    this._prevFusionStatus = {...data};
+                    this._prevFusionTime = now;
+                    this.status.status = data;
+                } catch(err) {}
+            });
+
+            es.addEventListener('inputStatus', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const now = Date.now();
+                    if (this._prevInputStatus && this._prevInputTime) {
+                        const dt = (now - this._prevInputTime) / 1000;
+                        if (dt > 0.1) {
+                            for (const k of ['nImu', 'nOptical', 'nGnss', 'nCan', 'nRtcmData', 'nVehicleSpeed']) {
+                                const delta = (data[k] || 0) - (this._prevInputStatus[k] || 0);
+                                this._inputRates[k] = delta > 0 ? Math.round(delta / dt) : 0;
+                            }
+                        }
+                    }
+                    this._prevInputStatus = {...data};
+                    this._prevInputTime = now;
+                    this.status.inputStatus = data;
+                } catch(err) {}
+            });
+
+            es.addEventListener('getIntercalibrationStatus', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    this.status.intercalibrationStatus = data;
+                    if (data.finished && data.quat) {
+                        this.cal.results = { quat: data.quat, trans: data.trans || {x:0,y:0,z:0} };
+                    }
+                    if (data.finished) {
+                        this.cleanupIntercalibration();
+                    }
+                    if (data.isRunning) {
+                        this.cal.restarting = false;
+                    }
+                } catch(err) {}
+            });
+
+            es.addEventListener('intercalibrationResult', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    this.status.intercalibrationStatus = data;
+                    if (data.quat) {
+                        this.cal.results = { quat: data.quat, trans: data.trans || {x:0,y:0,z:0} };
+                    }
+                } catch(err) {}
+            });
+
+            es.addEventListener('licenseStatus', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    this.license.info = data;
+                } catch(err) {}
+            });
+
+            es.addEventListener('fusedPose', (e) => {
+                const now = Date.now();
+                if (now - this._lastFusedPose < 50) return;
+                this._lastFusedPose = now;
+                try {
+                    const data = JSON.parse(e.data);
+                    const pose = data.fusedPose || data;
+                    this.status.fusedPose = pose;
+                    this.updateFusionCube(pose);
+                } catch(err) {}
+            });
+
+            es.addEventListener('opticalData', (e) => {
+                const now = Date.now();
+                if (now - this._lastOptical < 50) return;
+                this._lastOptical = now;
+                try {
+                    const data = JSON.parse(e.data);
+                    const opt = data.opticalData || data;
+                    this.status.opticalData = opt;
+                    this.updateOpticalCube(opt);
+                } catch(err) {}
+            });
+
+            es.addEventListener('fusedVehiclePose', (e) => {
+                const now = Date.now();
+                if (now - this._lastVehiclePose < 50) return;
+                this._lastVehiclePose = now;
+                try {
+                    const data = JSON.parse(e.data);
+                    const vp = data.fusedVehiclePose || data.fusedVehiclePoseV2 || data;
+                    this.status.fusedVehiclePose = vp;
+                    this.updateMap(vp);
+                } catch(err) {}
+            });
+        },
+
+        // ==================================================================
+        // REST API
+        // ==================================================================
+        async apiGet(url) {
+            const r = await fetch(url);
+            return r.json();
+        },
+        async apiPost(url, body) {
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body || {})
+            });
+            return r.json();
+        },
+
+        async refreshConfig() {
+            try {
+                const data = await this.apiGet('/api/config');
+                this.config = data;
+                this.configText = JSON.stringify(data, null, 4);
+                this.configError = '';
+            } catch(e) { this.configError = 'Failed to fetch config'; }
+        },
+
+        async setConfigFromEditor() {
+            try {
+                const parsed = JSON.parse(this.configText);
+                this.configError = '';
+                await this.apiPost('/api/config', parsed);
+                this.config = parsed;
+            } catch(e) {
+                this.configError = 'Invalid JSON: ' + e.message;
+            }
+        },
+
+        async saveConfig() {
+            await this.apiPost('/api/config/save');
+        },
+
+        // ==================================================================
+        // HELPERS
+        // ==================================================================
+        activityChannels() {
+            const inp = this.status.inputStatus;
+            const rates = this._inputRates;
+            const fus = this.status.status;
+            const fRates = this._fusionRates;
+            const fmtRate = (r) => r > 0 ? r + '/s' : '-';
+            return [
+                { key: 'imu',     label: 'IMU',           count: inp.nImu || 0,           rate: fmtRate(rates.nImu),           active: rates.nImu > 0 },
+                { key: 'optical', label: 'Optical',       count: inp.nOptical || 0,       rate: fmtRate(rates.nOptical),       active: rates.nOptical > 0 },
+                { key: 'gnss',    label: 'GNSS',          count: inp.nGnss || 0,          rate: fmtRate(rates.nGnss),          active: rates.nGnss > 0 },
+                { key: 'can',     label: 'CAN',           count: inp.nCan || 0,           rate: fmtRate(rates.nCan),           active: rates.nCan > 0 },
+                { key: 'rtcm',    label: 'RTCM',          count: inp.nRtcmData || 0,      rate: fmtRate(rates.nRtcmData),      active: rates.nRtcmData > 0 },
+                { key: 'vspeed',  label: 'Vehicle Speed',  count: inp.nVehicleSpeed || 0,  rate: fmtRate(rates.nVehicleSpeed),  active: rates.nVehicleSpeed > 0 },
+                { key: 'f_imu',   label: 'Fusion IMU',    count: fus.nImu || 0,           rate: fmtRate(fRates.nImu),          active: fRates.nImu > 0 },
+                { key: 'f_opt',   label: 'Fusion Optical', count: fus.nOptical || 0,       rate: fmtRate(fRates.nOptical),      active: fRates.nOptical > 0 },
+            ];
+        },
+
+        gnssQualityText(q) {
+            switch(q) {
+                case 0: return 'Fix not valid';
+                case 1: return 'GPS fix';
+                case 2: return 'Differential GPS fix';
+                case 3: return 'Not applicable';
+                case 4: return 'RTK fixed';
+                case 5: return 'RTK float';
+                case 6: return 'INS Dead reckoning';
+                default: return 'Unknown';
+            }
+        },
+
+        motionStatusText() {
+            switch(this.status.status.sensorMotionStatus) {
+                case 1: return 'At rest';
+                case 2: return 'Moving';
+                case 3: return 'Waiting for data';
+                default: return 'Unknown';
+            }
+        },
+
+        formatDuration(ns) {
+            if (!ns) return 'No calibration yet';
+            const s = ns / 1e9;
+            if (s < 60) return s.toFixed(1) + ' seconds';
+            if (s < 3600) return (s/60).toFixed(1) + ' minutes';
+            return (s/3600).toFixed(1) + ' hours';
+        },
+
+        formatCalibrationValue(v) {
+            if (!v) return 'Not calibrated';
+            try { return 'x: ' + v.x.toFixed(8) + ', y: ' + v.y.toFixed(8) + ', z: ' + v.z.toFixed(8); }
+            catch(e) { return 'Invalid format'; }
+        },
+
+        quaternionToEuler(q) {
+            if (!q) return { roll: '0', pitch: '0', yaw: '0' };
+            const roll = Math.atan2(2*(q.w*q.x + q.y*q.z), 1 - 2*(q.x*q.x + q.y*q.y)) * (180/Math.PI);
+            const pitch = Math.asin(Math.max(-1, Math.min(1, 2*(q.w*q.y - q.z*q.x)))) * (180/Math.PI);
+            const yaw = Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z)) * (180/Math.PI);
+            return { roll: roll.toFixed(2), pitch: pitch.toFixed(2), yaw: yaw.toFixed(2) };
+        },
+
+        fmt(v) { return v != null ? Number(v).toFixed(6) : '0'; },
+
+        calcEuler(q) {
+            if (!q || q.w === undefined) return {x:0, y:0, z:0};
+            const quat = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+            const euler = new THREE.Euler();
+            euler.setFromQuaternion(quat, 'XYZ');
+            return {
+                x: THREE.MathUtils.radToDeg(euler.x),
+                y: THREE.MathUtils.radToDeg(euler.y),
+                z: THREE.MathUtils.radToDeg(euler.z)
+            };
+        },
+
+        calProgress() {
+            const s = this.status.intercalibrationStatus;
+            if (!s || !s.minNPoses || s.minNPoses <= 0) return 0;
+            return Math.min(100, (s.nPoses / s.minNPoses) * 100);
+        },
+
+        // ==================================================================
+        // INTERCALIBRATION
+        // ==================================================================
+        getImuSources() {
+            const sources = [];
+            if (this.config?.sources?.imu) {
+                (Array.isArray(this.config.sources.imu) ? this.config.sources.imu : [this.config.sources.imu]).forEach(s => {
+                    sources.push({ text: s.settings?.id || 'Unnamed IMU', value: s.settings?.id || '', type: 'imu', sourceType: s.type, outEndpoint: s.outEndpoint });
+                });
+            }
+            if (this.cal.type === 'imuOptical') {
+                sources.push({ text: 'LPVR-AIR', value: 'lpvr-air', type: 'imu', sourceType: 'LPVR-AIR', outEndpoint: 'tcp://localhost:8898' });
+            }
+            return sources;
+        },
+
+        getOpticalSources() {
+            const sources = [];
+            if (this.config?.sources?.optical) {
+                (Array.isArray(this.config.sources.optical) ? this.config.sources.optical : [this.config.sources.optical]).forEach(src => {
+                    (src.settings?.bodyIDs || []).forEach((bid, i) => {
+                        const name = src.settings?.objectNameMapping?.[bid] || ('Body ' + bid);
+                        sources.push({
+                            text: name + ' (' + src.type + ')', value: String(bid), type: 'optical', sourceType: src.type,
+                            settings: { ...src.settings, endpoint: src.settings?.endpoints?.[i] }
+                        });
+                    });
+                });
+            }
+            if (this.cal.type === 'opticalOptical' || this.cal.type === 'handEye') {
+                sources.push({ text: 'LPVR-AIR', value: 'lpvr-air', type: 'optical', sourceType: 'LPVR-AIR', settings: { endpoint: 'tcp://localhost:8899' } });
+            }
+            return sources;
+        },
+
+        getFirstSourceOptions() {
+            if (!this.cal.type) return [];
+            return this.cal.type === 'imuOptical' ? this.getImuSources() : this.getOpticalSources();
+        },
+
+        getSecondSourceOptions() {
+            if (!this.cal.type) return [];
+            return this.getOpticalSources();
+        },
+
+        async startIntercalibration() {
+            if (!this.sse.connected) return;
+            if (!this.cal.type || !this.cal.firstSource || !this.cal.secondSource) return;
+
+            this.cal.restarting = true;
+            const first = JSON.parse(this.cal.firstSource);
+            const second = JSON.parse(this.cal.secondSource);
+
+            let firstEndpoint, secondEndpoint;
+            if (this.cal.type === 'imuOptical') {
+                firstEndpoint = first.outEndpoint;
+            } else {
+                firstEndpoint = first.settings?.endpoint;
+            }
+            secondEndpoint = second.settings?.endpoint;
+
+            if (!firstEndpoint || !secondEndpoint) { this.cal.restarting = false; return; }
+
+            const settings = { type: this.cal.type };
+
+            // Build senderIds
+            if (this.cal.type === 'opticalOptical' || this.cal.type === 'handEye') {
+                const firstId = first.value === 'lpvr-air' ? 'insideOut' : this.findSenderId(first);
+                const secondId = second.value === 'lpvr-air' ? 'insideOut' : this.findSenderId(second);
+                if (!firstId || !secondId) { this.cal.restarting = false; return; }
+                settings.senderIds = [firstId, secondId];
+            } else if (this.cal.type === 'imuOptical') {
+                const secondId = this.findSenderId(second);
+                if (!secondId) { this.cal.restarting = false; return; }
+                settings.senderIds = [secondId];
+            }
+
+            const updatedConfig = JSON.parse(JSON.stringify(this.config));
+            if (!updatedConfig.sinks) updatedConfig.sinks = {};
+            updatedConfig.sinks.imuOpticalIntercalibration = {
+                inputEndpoints: [firstEndpoint, secondEndpoint],
+                settings: settings
+            };
+
+            await this.apiPost('/api/config', updatedConfig);
+            this.config = updatedConfig;
+            await this.apiPost('/api/config/save');
+        },
+
+        findSenderId(src) {
+            if (!this.config?.sources?.optical) return null;
+            const opticals = Array.isArray(this.config.sources.optical) ? this.config.sources.optical : [this.config.sources.optical];
+            for (const source of opticals) {
+                if (source.settings?.bodyIDs?.includes(parseInt(src.value)) && source.settings?.endpoints?.includes(src.settings?.endpoint)) {
+                    return source.settings?.objectNameMapping?.[src.value] || null;
+                }
+            }
+            return null;
+        },
+
+        async cleanupIntercalibration() {
+            if (!this.config?.sinks?.imuOpticalIntercalibration) return;
+            const updated = JSON.parse(JSON.stringify(this.config));
+            delete updated.sinks.imuOpticalIntercalibration;
+            await this.apiPost('/api/config', updated);
+            this.config = updated;
+            await this.apiPost('/api/config/save');
+            this.status.intercalibrationStatus.isRunning = false;
+            this.status.intercalibrationStatus.finished = false;
+            this.status.intercalibrationStatus.nPoses = 0;
+        },
+
+        async applyIntercalibrationResult() {
+            if (!this.cal.results.quat || !this.config) return;
+            const updated = JSON.parse(JSON.stringify(this.config));
+
+            if (updated.sinks?.fusion) {
+                const sf = updated.sinks.fusion.settings?.SensorFusion;
+                if (!sf) return;
+                if (this.cal.type === 'imuOptical') {
+                    sf.alignment = this.cal.results.quat;
+                } else {
+                    sf.opticalAlignment = this.cal.results.quat;
+                    if (this.cal.results.trans) sf.opticalVector = this.cal.results.trans;
+                }
+            } else if (updated.sinks?.fullFusion) {
+                const s = updated.sinks.fullFusion.settings;
+                if (!s) return;
+                if (this.cal.type === 'imuOptical') {
+                    s.imuToOpticalFrameQuat = this.cal.results.quat;
+                } else {
+                    s.referenceToOpticalFrameQuat = this.cal.results.quat;
+                    if (this.cal.results.trans) s.referenceToOpticalFrameVec = this.cal.results.trans;
+                }
+            }
+
+            await this.apiPost('/api/config', updated);
+            this.config = updated;
+            await this.apiPost('/api/config/save');
+        },
+
+        // ==================================================================
+        // LICENSE
+        // ==================================================================
+        async fetchLicenseStatus() {
+            try {
+                const data = await this.apiGet('/api/license/status');
+                if (data.license) this.license.info = data.license;
+            } catch(e) {}
+        },
+
+        async checkLicenseFile() {
+            this.license.loading = true;
+            this.license.message = '';
+            try {
+                const data = await this.apiPost('/api/license/check-file', {
+                    licenseFile: this.license.licenseFile
+                });
+                if (data.license) this.license.info = data.license;
+                this.license.message = data.license?.valid ? 'License valid' : (data.license?.error || 'License invalid');
+                this.license.messageType = data.license?.valid ? 'success' : 'error';
+            } catch(e) {
+                this.license.message = 'Request failed';
+                this.license.messageType = 'error';
+            }
+            this.license.loading = false;
+        },
+
+        async checkLicenseServer() {
+            this.license.loading = true;
+            this.license.message = '';
+            try {
+                const data = await this.apiPost('/api/license/check-server', {
+                    licenseFile: this.license.licenseFile,
+                    licenseKey: this.license.licenseKey,
+                    serverUrl: this.license.serverUrl
+                });
+                if (data.license) this.license.info = data.license;
+                this.license.message = data.license?.valid ? 'License activated' : (data.license?.error || 'Activation failed');
+                this.license.messageType = data.license?.valid ? 'success' : 'error';
+            } catch(e) {
+                this.license.message = 'Request failed';
+                this.license.messageType = 'error';
+            }
+            this.license.loading = false;
+        },
+
+        async checkLicenseToken() {
+            this.license.loading = true;
+            this.license.message = '';
+            try {
+                const data = await this.apiPost('/api/license/check-token', {});
+                if (data.license) this.license.info = data.license;
+                this.license.message = data.license?.valid ? 'USB token valid' : (data.license?.error || 'No valid token found');
+                this.license.messageType = data.license?.valid ? 'success' : 'error';
+            } catch(e) {
+                this.license.message = 'Request failed';
+                this.license.messageType = 'error';
+            }
+            this.license.loading = false;
+        },
+
+        async uploadLicense(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.license.loading = true;
+            this.license.message = '';
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const r = await fetch('/api/license/upload', { method: 'POST', body: form });
+                const data = await r.json();
+                if (data.license) this.license.info = data.license;
+                this.license.message = data.license?.valid ? 'License uploaded and verified' : (data.license?.error || 'Invalid license file');
+                this.license.messageType = data.license?.valid ? 'success' : 'error';
+            } catch(e) {
+                this.license.message = 'Upload failed';
+                this.license.messageType = 'error';
+            }
+            this.license.loading = false;
+            event.target.value = '';
+        },
+
+        licenseStatusBadgeClass() {
+            const s = this.license.info.status;
+            if (s === 'valid') return 'connected';
+            if (s === 'grace_period') return 'connecting';
+            return 'disconnected';
+        },
+
+        licenseStatusText() {
+            const map = {
+                valid: 'Valid',
+                grace_period: 'Valid (Grace Period)',
+                expired: 'Expired',
+                lease_expired: 'Lease Expired',
+                invalid_machine: 'Invalid Machine',
+                invalid_signature: 'Invalid Signature',
+                file_not_found: 'Not Found',
+                token_not_found: 'Token Not Found',
+                error: 'Error',
+                not_checked: 'Not Checked'
+            };
+            return map[this.license.info.status] || this.license.info.status;
+        },
+
+        formatExpiry(iso) {
+            if (!iso) return 'Perpetual';
+            try { return new Date(iso).toLocaleDateString(); } catch(e) { return iso; }
+        },
+
+        async fetchMachines() {
+            if (!this.license.licenseKey || !this.license.serverUrl) return;
+            this.license.machinesLoading = true;
+            this.license.machinesError = '';
+            try {
+                const data = await this.apiPost('/api/license/machines', {
+                    licenseKey: this.license.licenseKey,
+                    serverUrl: this.license.serverUrl
+                });
+                if (data.status === 'OK' && data.data) {
+                    this.license.machines = data.data.active_machines || [];
+                    this.license.machinesMax = data.data.max_machines || 0;
+                } else {
+                    this.license.machinesError = data.error || 'Failed to load machines';
+                }
+            } catch(e) {
+                this.license.machinesError = 'Request failed';
+            }
+            this.license.machinesLoading = false;
+        },
+
+        async deactivateMachine(machineCode, isSelf) {
+            const msg = isSelf
+                ? 'Remove THIS machine from the license? The current license will be invalidated and you will need to re-activate.'
+                : 'Remove this machine from the license? It will need to re-activate to use the license again.';
+            if (!confirm(msg)) return;
+            this.license.machinesLoading = true;
+            this.license.machinesError = '';
+            try {
+                const data = await this.apiPost('/api/license/deactivate-machine', {
+                    licenseKey: this.license.licenseKey,
+                    serverUrl: this.license.serverUrl,
+                    machineCode: machineCode
+                });
+                if (data.status === 'OK') {
+                    await this.fetchMachines();
+                } else {
+                    this.license.machinesError = data.error || 'Failed to remove machine';
+                    this.license.machinesLoading = false;
+                }
+            } catch(e) {
+                this.license.machinesError = 'Request failed';
+                this.license.machinesLoading = false;
+            }
+        },
+
+        // ==================================================================
+        // 3D VIEW
+        // ==================================================================
+        switchTo3D() {
+            this.view = '3dview';
+            this.$nextTick(() => {
+                if (!this.td.inited) this.init3D();
+                else if (this.td.renderer) this.resize3D();
+            });
+        },
+
+        init3D() {
+            const container = this.$refs.threeCanvas;
+            if (!container) return;
+            this.td.inited = true;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x888888);
+            this.td.scene = scene;
+
+            const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 0, 3);
+            scene.add(camera);
+            this.td.camera = camera;
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+            this.td.renderer = renderer;
+
+            const controls = new THREE.TrackballControls(camera, renderer.domElement);
+            controls.rotateSpeed = 2.0;
+            controls.zoomSpeed = 1.0;
+            controls.panSpeed = 1.0;
+            controls.dynamicDampingFactor = 0.2;
+            controls.minDistance = 0.1;
+            controls.maxDistance = 20;
+            this.td.controls = controls;
+
+            scene.add(new THREE.AxesHelper(5));
+
+            const geom = new THREE.BoxGeometry(2, 2, 2);
+            const matFusion = new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 1.0 });
+            const matOptical = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 1.0 });
+
+            const cubeFusion = new THREE.Mesh(geom, matFusion);
+            cubeFusion.position.set(-0.01, 0, 0);
+            scene.add(cubeFusion);
+            this.td.cubeFusion = cubeFusion;
+
+            const cubeOptical = new THREE.Mesh(geom, matOptical);
+            cubeOptical.position.set(0.01, 0, 0);
+            scene.add(cubeOptical);
+            this.td.cubeOptical = cubeOptical;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(0, 0, 10);
+            scene.add(dirLight);
+
+            const self = this;
+            function animate() {
+                self.td.animId = requestAnimationFrame(animate);
+                if (self.td.controls) self.td.controls.update();
+                if (self.td.cubeFusion) self.td.cubeFusion.visible = self.td.showFusion;
+                if (self.td.cubeOptical) self.td.cubeOptical.visible = self.td.showOptical;
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', () => this.resize3D());
+        },
+
+        resize3D() {
+            const c = this.$refs.threeCanvas;
+            if (!c || !this.td.renderer) return;
+            this.td.camera.aspect = c.clientWidth / c.clientHeight;
+            this.td.camera.updateProjectionMatrix();
+            this.td.renderer.setSize(c.clientWidth, c.clientHeight);
+        },
+
+        resetCamera() {
+            if (this.td.controls) this.td.controls.reset();
+        },
+
+        updateFusionCube(data) {
+            if (!this.td.cubeFusion) return;
+            if (data?.orientation) {
+                this.td.cubeFusion.quaternion.set(data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w);
+            }
+            if (data?.position && this.td.updatePos) {
+                this.td.cubeFusion.position.set(data.position.x*10 - 0.01, data.position.y*10, data.position.z*10);
+            }
+        },
+
+        updateOpticalCube(data) {
+            if (!this.td.cubeOptical) return;
+            if (data?.orientation) {
+                this.td.cubeOptical.quaternion.set(data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w);
+            }
+            if (data?.position && this.td.updatePos) {
+                this.td.cubeOptical.position.set(data.position.x*10 + 0.01, data.position.y*10, data.position.z*10);
+            }
+        },
+
+        // ==================================================================
+        // MAP VIEW
+        // ==================================================================
+        switchToMap() {
+            this.view = 'map';
+            this.$nextTick(() => {
+                if (!this.mapData.inited) this.initMap();
+                else if (this.mapData.map) this.mapData.map.invalidateSize();
+            });
+        },
+
+        initMap() {
+            const container = this.$refs.mapContainer;
+            if (!container || typeof L === 'undefined') return;
+            this.mapData.inited = true;
+
+            L.Icon.Default.imagePath = '/images/';
+
+            const map = L.map(container).setView([35.657, 139.732], 18);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            const markerIcon = L.divIcon({
+                className: 'vehicle-marker',
+                html: '<div class="triangle-marker"></div>',
+                iconSize: [16, 40],
+                iconAnchor: [8, 40]
+            });
+
+            const marker = L.marker([35.657, 139.732], { icon: markerIcon }).addTo(map);
+            const polyline = L.polyline([], { color: 'red', smoothFactor: 0 }).addTo(map);
+
+            this.mapData.map = map;
+            this.mapData.marker = marker;
+            this.mapData.polyline = polyline;
+        },
+
+        updateMap(vp) {
+            if (!vp?.globalPosition || !this.mapData.map) return;
+            this.mapData.timestamp = vp.timestamp || 0;
+
+            const pos = [vp.globalPosition.y, vp.globalPosition.x];
+            this.mapData.marker.setLatLng(pos);
+
+            if (!this.mapData.centerInited) {
+                this.mapData.centerInited = true;
+                this.mapData.map.setView(pos);
+            }
+            if (this.mapData.follow) {
+                this.mapData.map.setView(pos);
+            }
+
+            this.mapData.track.push(pos);
+            if (this.mapData.track.length > 1500) {
+                this.mapData.track = this.mapData.track.slice(-1500);
+            }
+            this.mapData.polyline.setLatLngs(this.mapData.track);
+
+            // Heading
+            if (vp.yaw !== undefined) {
+                const deg = (vp.yaw * 180 / Math.PI) % 360;
+                this.mapData.heading = deg;
+
+                let diff = deg - this.mapData.rotAngle;
+                if (diff > 180) diff -= 360;
+                else if (diff < -180) diff += 360;
+                this.mapData.rotAngle += diff;
+
+                const el = document.querySelector('.triangle-marker');
+                if (el) {
+                    el.style.transform = 'rotate(' + this.mapData.rotAngle + 'deg)';
+                    if (this.mapData.rtkStatus === 0) el.style.borderBottomColor = 'yellow';
+                    else if (this.mapData.rtkStatus === 4) el.style.borderBottomColor = 'blue';
+                    else el.style.borderBottomColor = 'red';
+                }
+            }
+
+            // RTK from inputStatus
+            this.mapData.rtkStatus = this.status.inputStatus.gnssQuality || 0;
+        },
+
+        clearMapPath() {
+            this.mapData.track = [];
+            if (this.mapData.polyline) this.mapData.polyline.setLatLngs([]);
+            this.mapData.centerInited = false;
+        },
+
+        mapTimestamp() {
+            if (!this.mapData.timestamp) return '';
+            const ms = Math.floor(this.mapData.timestamp / 1000000);
+            return new Date(ms).toLocaleString();
+        }
+    };
+}
+</script>
+
+<style>[x-cloak] { display: none !important; }</style>
+</body>
+</html>

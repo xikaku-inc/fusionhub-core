@@ -1,0 +1,11 @@
+[package]
+name = "fusion_registry"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+fusion_types = { path = "../fusion_types" }

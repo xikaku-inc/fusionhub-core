@@ -1,0 +1,305 @@
+/* Node Editor Layout */
+.node-editor-container {
+  display: flex;
+  height: calc(100vh - 80px);
+  gap: 0;
+}
+
+.node-editor-canvas {
+  flex: 1;
+  position: relative;
+}
+
+/* Node Palette */
+.node-palette {
+  width: 220px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.palette-title {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-section {
+  padding: 8px 0;
+}
+
+.palette-section-title {
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text2);
+  letter-spacing: 0.5px;
+}
+
+.palette-item {
+  padding: 8px 16px;
+  margin: 2px 8px;
+  border-radius: 4px;
+  border-left: 3px solid;
+  background: var(--bg3);
+  cursor: grab;
+  font-size: 12px;
+  transition: background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.palette-item:hover {
+  background: var(--bg4);
+}
+
+.palette-item:active {
+  cursor: grabbing;
+}
+
+.palette-item-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.palette-item-io {
+  font-size: 10px;
+  color: var(--text2);
+}
+
+.palette-inputs { color: var(--accent); }
+.palette-outputs { color: var(--green); }
+
+/* Properties Panel */
+.properties-panel {
+  width: 280px;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.properties-title {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.properties-empty {
+  padding: 16px;
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.properties-content {
+  padding: 8px 16px;
+}
+
+.prop-section {
+  margin-bottom: 12px;
+}
+
+.prop-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.prop-value {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prop-divider {
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.prop-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+/* Custom Nodes */
+.fh-node {
+  background: var(--bg2);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  min-width: 160px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.15s;
+}
+
+.fh-node.selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.fh-node.disabled {
+  opacity: 0.5;
+}
+
+.node-header {
+  padding: 6px 10px;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.node-role-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.node-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-subtype {
+  font-size: 10px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.node-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.node-rate {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: auto;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.node-body {
+  padding: 6px 0;
+}
+
+.node-ports-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.node-ports-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.node-port {
+  padding: 3px 10px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.port-label {
+  font-size: 10px;
+  color: var(--text2);
+}
+
+.port-label.left {
+  padding-left: 8px;
+}
+
+.port-label.right {
+  padding-right: 8px;
+}
+
+.port-handle {
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid var(--bg2) !important;
+  background: var(--accent) !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.port-handle.source-handle {
+  background: var(--green) !important;
+}
+
+.port-handle.target-handle {
+  background: var(--accent) !important;
+}
+
+/* React Flow overrides for dark theme */
+.react-flow__background {
+  background: var(--bg) !important;
+}
+
+.react-flow__controls button {
+  background: var(--bg3) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  fill: var(--text) !important;
+}
+
+.react-flow__controls button:hover {
+  background: var(--bg4) !important;
+}
+
+.react-flow__minimap {
+  background: var(--bg2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 4px;
+}
+
+.react-flow__edge-path {
+  stroke: var(--text2) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent) !important;
+  stroke-width: 3 !important;
+}
+
+.react-flow__panel {
+  margin: 8px !important;
+}
+
+.react-flow__panel button {
+  margin: 0 4px;
+}
+
+/* Animated edge for active data flow */
+.react-flow__edge-path.animated {
+  stroke-dasharray: 5;
+  animation: edge-flow 1s linear infinite;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}

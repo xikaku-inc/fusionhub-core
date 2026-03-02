@@ -1,0 +1,15 @@
+[package]
+name = "recorder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+ctrlc = "3"
+fusion_types = { path = "../fusion_types" }
+log_utils = { path = "../log_utils" }
+networking = { path = "../networking" }
+fusion = { path = "../fusion" }

@@ -1,0 +1,21 @@
+syntax = "proto3";
+package fusion.proto;
+
+message Vector2 { double x = 2; double y = 3; }
+message Vector { double x = 2; double y = 3; double z = 4; }
+message GpsPoint { double longitude = 2; double latitude = 3; double height = 4; }
+message Quaternion { double w = 1; double x = 2; double y = 3; double z = 4; }
+message ImuData { int64 timecode = 1; int64 recorded_time = 2; Vector gyroscope = 3; Vector accelerometer = 4; double period = 5; int32 frame_count = 6; int32 sensor_time = 7; double latency = 8; int64 start_tick = 9; bool fake_timecode = 10; string sensor_name = 11; Quaternion quaternion = 12; Vector euler = 13; int64 timestamp = 14; string sender_id = 15; Vector linear_velocity = 16; }
+message GnssData { int64 timecode = 1; int64 recorded_time = 2; double latitude = 3; double longitude = 4; double period = 5; int32 frame_count = 6; int32 sensor_time = 7; double latency = 8; int64 start_tick = 9; bool fake_timecode = 10; string sensor_name = 11; Quaternion orientation = 12; double height = 13; double vertical_accuracy = 14; double horizontal_accuracy = 15; int32 quality = 16; int32 n_sat = 17; double hdop = 18; double tmg = 19; double heading = 20; double altitude = 21; double undulation = 22; int64 timestamp = 23; string sender_id = 24; double diff_age = 25; }
+message OpticalData { int64 timecode = 1; int64 recorded_time = 2; Vector position = 3; Quaternion orientation = 4; Vector angular_velocity = 5; double quality = 6; double frame_rate = 7; int32 frame_number = 8; double latency = 9; bool fake_timecode = 10; string object_name = 11; int64 timestamp = 12; string sender_id = 13; }
+message FusedPose { int64 timestamp = 1; Vector position = 2; Quaternion orientation = 3; Vector angular_velocity = 4; int64 timecode = 5; string sender_id = 6; Vector velocity = 7; Vector acceleration = 8; int64 frame_number = 9; int64 transmission_time = 10; double latency = 11; string object_name = 12; }
+message RTCMData { bytes chunk = 1; int32 length = 2; int64 timestamp = 3; string sender_id = 4; }
+message CANData { int64 timecode = 1; int64 recorded_time = 2; bool is_extended = 3; uint32 id = 4; bytes data = 5; int32 length = 6; int64 timestamp = 7; string sender_id = 8; }
+message VehicleState { int64 timecode = 1; int64 recorded_time = 2; double wheel_base = 3; double track_width = 4; double steering_angle_l = 5; double steering_angle_r = 6; double wheel_fr = 7; double wheel_fl = 8; double wheel_rr = 9; double wheel_rl = 10; int64 timestamp = 11; string sender_id = 12; }
+message FusedVehiclePose { int64 timestamp = 1; Vector2 position = 2; Vector2 global_position = 3; double yaw = 4; string utm_zone = 5; int64 timecode = 6; Vector acceleration = 7; }
+message FusedVehiclePoseV2 { int64 timestamp = 1; Vector2 position = 2; Vector2 global_position = 3; double yaw = 4; string utm_zone = 5; int64 timecode = 6; Vector2 acceleration = 7; string sender_id = 8; Vector2 velocity = 9; double angular_velocity = 10; int64 transmission_time = 11; int64 internal_frame_count = 12; }
+message GlobalFusedPose { int64 timestamp = 1; GpsPoint position = 2; Quaternion orientation = 3; string sender_id = 4; int64 timecode = 5; int64 transmission_time = 6; }
+message VehicleSpeed { int64 timecode = 1; int64 recorded_time = 2; double linear = 3; double angular = 4; bool valid_angular = 5; int64 timestamp = 6; string sender_id = 7; }
+message VelocityMeterData { int64 timestamp = 1; string sender_id = 2; int32 counter = 3; double velocity = 4; double distance = 5; double material = 6; double doppler_level = 7; int32 output_status = 8; }
+message FusionStateInt { int64 recorded_time = 1; Vector position = 2; Vector velocity = 3; double gravity = 4; Quaternion imu_orientation = 5; Vector omega_bias = 6; Vector accel_bias = 7; Vector imu_position = 8; int64 timecode = 9; int64 timestamp = 10; string sender_id = 11; }
+message StreamData { int32 sequence_number = 1; ImuData imu_data = 2; OpticalData optical_data = 3; FusedPose fused_pose = 4; GnssData gnss_data = 5; RTCMData rtcm_data = 6; CANData can_data = 7; VehicleState vehicle_state = 8; FusedVehiclePose fused_vehicle_pose = 9; GlobalFusedPose global_fused_pose = 10; VehicleSpeed vehicle_speed = 11; FusionStateInt fusion_state_int = 12; FusedVehiclePoseV2 fused_vehicle_pose_v2 = 13; VelocityMeterData velocity_meter_data = 14; }

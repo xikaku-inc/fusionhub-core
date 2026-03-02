@@ -1,0 +1,69 @@
+[package]
+name = "fusionhub-core"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fusionhub-core"
+path = "src/main.rs"
+
+[dependencies]
+log = { workspace = true }
+env_logger = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+fusion_types = { path = "crates/fusion_types" }
+fusion_registry = { path = "crates/fusion_registry" }
+fusion = { path = "crates/fusion" }
+networking = { path = "crates/networking" }
+log_utils = { path = "crates/log_utils" }
+websocket_server = { path = "crates/websocket_server" }
+crypto = { path = "crates/crypto" }
+web_ui = { path = "crates/web_ui" }
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/log_utils",
+    "crates/fusion_types",
+    "crates/fusion_protobuf",
+    "crates/fusion_registry",
+    "crates/networking",
+    "crates/fusion",
+    "crates/websocket_server",
+    "crates/replay",
+    "crates/recorder",
+    "crates/lockit",
+    "crates/capi",
+    "crates/crypto",
+    "crates/openzen-sys",
+    "crates/web_ui",
+]
+
+[workspace.dependencies]
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+prost = "0.13"
+prost-types = "0.13"
+zeromq = "0.4"
+log = "0.4"
+env_logger = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+approx = "0.5"
+clap = { version = "4", features = ["derive"] }
+tungstenite = "0.24"
+tokio-tungstenite = "0.24"
+rumqttc = "0.24"
+serialport = "4"
+reqwest = { version = "0.12", features = ["blocking"] }
+libloading = "0.8"
+hidapi = "2"
+socket2 = "0.5"
+flate2 = "1"

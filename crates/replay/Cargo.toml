@@ -1,0 +1,17 @@
+[package]
+name = "replay"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "FHReplay"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }
+fusion_types = { path = "../fusion_types" }
+log_utils = { path = "../log_utils" }
+networking = { path = "../networking" }
+fusion = { path = "../fusion" }

@@ -1,0 +1,33 @@
+[package]
+name = "fusion"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nalgebra = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serialport = { workspace = true }
+rumqttc = { workspace = true }
+reqwest = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = "0.3"
+libloading = { workspace = true }
+hidapi = { workspace = true }
+openzen-sys = { path = "../openzen-sys" }
+socket2 = { workspace = true }
+flate2 = { workspace = true }
+fusion_types = { path = "../fusion_types" }
+fusion_registry = { path = "../fusion_registry" }
+fusion_protobuf = { path = "../fusion_protobuf" }
+log_utils = { path = "../log_utils" }
+networking = { path = "../networking" }
+
+[dev-dependencies]
+approx = { workspace = true }
+env_logger = { workspace = true }
