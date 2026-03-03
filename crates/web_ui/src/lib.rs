@@ -47,6 +47,38 @@ struct ServerState {
 type SharedState = Arc<Mutex<ServerState>>;
 
 // ---------------------------------------------------------------------------
+// ConfigHandle — public accessor for MCP server and other consumers
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct ConfigHandle {
+    state: SharedState,
+}
+
+impl ConfigHandle {
+    pub async fn get(&self) -> Value {
+        self.state.lock().await.config.clone()
+    }
+
+    pub async fn set(&self, config: Value) {
+        let mut s = self.state.lock().await;
+        s.config = config.clone();
+        let event = json!({ "type": "config", "data": config });
+        let _ = s.sse_tx.send(event.to_string());
+    }
+
+    pub async fn config_path(&self) -> PathBuf {
+        self.state.lock().await.config_path.clone()
+    }
+
+    pub async fn trigger_restart(&self) {
+        let mut s = self.state.lock().await;
+        s.is_reset = true;
+        s.reset_notify.notify_one();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // WebUiServer
 // ---------------------------------------------------------------------------
 
@@ -263,6 +295,10 @@ impl WebUiServer {
 
     pub async fn paused_flag(&self) -> Arc<AtomicBool> {
         self.state.lock().await.paused.clone()
+    }
+
+    pub fn config_handle(&self) -> ConfigHandle {
+        ConfigHandle { state: self.state.clone() }
     }
 
     pub async fn send_startup_config(&self) {

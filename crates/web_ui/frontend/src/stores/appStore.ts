@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiGet, apiPost, apiPostFormData } from '../api/client';
-import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload } from '../api/types';
+import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload, McpStatus } from '../api/types';
 import type { NodeTypeDefinition, UiExtension } from '../types/nodes';
 
 interface AppState {
@@ -56,6 +56,10 @@ interface AppState {
   setNodeStatuses: (payload: NodeStatusPayload) => void;
   restart: () => Promise<void>;
   togglePause: () => Promise<void>;
+
+  // MCP
+  mcpStatus: McpStatus | null;
+  setMcpStatus: (s: McpStatus) => void;
 
   // License
   license: {
@@ -220,6 +224,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ paused: !get().paused });
     } catch {}
   },
+
+  // MCP
+  mcpStatus: null,
+  setMcpStatus: (s) => set({ mcpStatus: s }),
 
   // License
   license: {

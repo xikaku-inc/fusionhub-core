@@ -6,12 +6,14 @@ mod subscriber;
 mod command;
 mod network_writer;
 mod disk;
+pub mod probe;
 
 pub use publisher::Publisher;
 pub use subscriber::Subscriber;
 pub use command::{CommandPublisher, CommandSubscriber};
 pub use network_writer::NetworkWriter;
 pub use disk::{DiskWriter, DiskReader};
+pub use runtime::{get_data_channel, is_inproc, resolve_endpoint_for_connect};
 
 /// Converts endpoint strings for subscriber connections.
 /// Replaces `*` and `0.0.0.0` with `localhost`, mirroring C++ `EndpointStringConverter::starToLocalhost`.

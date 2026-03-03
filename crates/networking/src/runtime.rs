@@ -73,7 +73,7 @@ pub fn get_command_channel(name: &str) -> Option<broadcast::Sender<ApiRequest>> 
 ///
 /// Always uses a separate runtime to avoid deadlocks when Publisher/Subscriber
 /// constructors block-wait for async operations to complete.
-pub(crate) fn runtime_handle() -> Handle {
+pub fn runtime_handle() -> Handle {
     RUNTIME
         .get_or_init(|| {
             tokio::runtime::Builder::new_multi_thread()
@@ -95,8 +95,7 @@ pub(crate) fn resolve_endpoint_for_bind(endpoint: &str) -> String {
 }
 
 /// Resolve an endpoint for connecting (Subscriber/CommandSubscriber).
-/// Only called for TCP endpoints.
-pub(crate) fn resolve_endpoint_for_connect(endpoint: &str) -> String {
+pub fn resolve_endpoint_for_connect(endpoint: &str) -> String {
     if endpoint.starts_with("inproc://") {
         return endpoint.to_owned();
     }

@@ -115,3 +115,18 @@ export interface NodeStatusPayload {
   paused: boolean;
   nodes: NodeStatuses;
 }
+
+export interface McpToolCallEntry {
+  tool: string;
+  time: string;
+}
+
+export interface McpStatus {
+  connected: boolean;
+  clientName: string | null;
+  connectedSince: string | null;
+  toolCallCount: number;
+  lastTool: string | null;
+  lastToolTime: string | null;
+  recentTools: McpToolCallEntry[];
+}

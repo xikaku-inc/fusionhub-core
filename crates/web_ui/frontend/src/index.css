@@ -608,3 +608,89 @@ h3:first-child { margin-top: 0; }
     font-size: 12px;
     font-weight: 600;
 }
+
+/* MCP Status Card */
+.mcp-status-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.mcp-accent {
+    height: 3px;
+    background: #a78bfa;
+}
+.mcp-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 6px;
+}
+.mcp-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    flex: 1;
+}
+.mcp-conn-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.mcp-conn-badge.connected {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green);
+}
+.mcp-conn-badge.disconnected {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+.mcp-info {
+    padding: 4px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.mcp-info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+}
+.mcp-info-label {
+    color: var(--text2);
+}
+.mcp-info-value {
+    color: var(--text);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+.mcp-tool-list {
+    border-top: 1px solid var(--border);
+    padding: 6px 12px 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.mcp-tool-list-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text2);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+.mcp-tool-entry {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 1px 0;
+}
+.mcp-tool-name {
+    color: var(--text);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+.mcp-tool-time {
+    color: var(--text2);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 11px;
+}

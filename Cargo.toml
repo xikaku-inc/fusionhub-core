@@ -41,6 +41,7 @@ members = [
     "crates/crypto",
     "crates/openzen-sys",
     "crates/web_ui",
+    "crates/mcp_server",
 ]
 
 [workspace.dependencies]
@@ -67,3 +68,5 @@ libloading = "0.8"
 hidapi = "2"
 socket2 = "0.5"
 flate2 = "1"
+schemars = "0.8"
+rmcp = { version = "0.17", features = ["server", "macros", "transport-io"] }

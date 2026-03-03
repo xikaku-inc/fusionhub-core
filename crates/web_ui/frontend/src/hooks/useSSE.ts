@@ -107,6 +107,10 @@ export function useSSE() {
         case 'nodeStatuses':
           state.setNodeStatuses(data);
           break;
+
+        case 'mcpStatus':
+          state.setMcpStatus(data);
+          break;
       }
     }
 
@@ -114,7 +118,7 @@ export function useSSE() {
       'config', 'status', 'inputStatus',
       'getIntercalibrationStatus', 'intercalibrationResult',
       'licenseStatus', 'fusedPose', 'opticalData', 'fusedVehiclePose',
-      'nodeStatuses',
+      'nodeStatuses', 'mcpStatus',
     ];
 
     for (const type of eventTypes) {

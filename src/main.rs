@@ -23,9 +23,13 @@ const DEFAULT_UI_PORT: u16 = 19359;
 #[derive(Parser)]
 #[command(name = "fusionhub-core", about = "LP FusionHub Core - open-source sensor fusion framework")]
 struct Cli {
-    /// Path to the JSON configuration file
-    #[arg(short, long)]
+    /// Path to the JSON configuration file [default: config.json]
+    #[arg(short, long, default_value = "config.json")]
     config: PathBuf,
+
+    /// Path to a license file (overrides LicenseInfo in config)
+    #[arg(short, long)]
+    license: Option<PathBuf>,
 
     /// WebSocket server port (overrides config value)
     #[arg(short, long)]
@@ -624,22 +628,32 @@ fn strip_json_comments(input: &str) -> String {
     result
 }
 
-fn check_license(config: &Value) -> (bool, crypto::LicenseInfo) {
+fn check_license(config: &Value, license_path: Option<&std::path::Path>) -> (bool, crypto::LicenseInfo) {
     let mut crypto = Crypto::new();
-    let license_info = config
-        .get("LicenseInfo")
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "{}".to_owned());
-    let valid = crypto.check_license(&license_info);
-    if valid {
+    let info = if let Some(path) = license_path {
+        let path_str = path.to_string_lossy();
+        log::info!("Using license file from CLI: {}", path_str);
+        crypto.check_license_file(&path_str)
+    } else if config.get("LicenseInfo").is_some() {
+        let license_json = config["LicenseInfo"].to_string();
+        crypto.check_license(&license_json);
+        crypto.last_info().clone()
+    } else if std::path::Path::new("license.json").exists() {
+        log::info!("Using default license file: license.json");
+        crypto.check_license_file("license.json")
+    } else {
+        crypto.check_license("{}");
+        crypto.last_info().clone()
+    };
+    if info.valid {
         log::info!("License check passed");
-        if !crypto.features().is_empty() {
-            log::info!("Licensed features: {}", crypto.features().join(", "));
+        if !info.features.is_empty() {
+            log::info!("Licensed features: {}", info.features.join(", "));
         }
     } else {
         log::error!("License check failed — FusionHub may run with limited functionality");
     }
-    (valid, crypto.last_info().clone())
+    (info.valid, info)
 }
 
 #[tokio::main]
@@ -660,7 +674,8 @@ async fn main() -> Result<()> {
         config["websocketPort"] = Value::from(port);
     }
 
-    let (_, license_info) = check_license(&config);
+    let license_path = cli.license.as_deref();
+    let (_, license_info) = check_license(&config, license_path);
     let mut licensed_features = license_info.features.clone();
 
     let config_path = cli.config.to_string_lossy().to_string();
@@ -705,7 +720,7 @@ async fn main() -> Result<()> {
         // the most up-to-date config regardless of which UI triggered it.
         config = load_config(&cli.config)?;
         ws_server.set_config(config.clone()).await;
-        let (_, new_license_info) = check_license(&config);
+        let (_, new_license_info) = check_license(&config, license_path);
         licensed_features = new_license_info.features.clone();
         ui_server.update_license_status(new_license_info).await;
         log::info!("Restarting FusionHub with updated configuration");

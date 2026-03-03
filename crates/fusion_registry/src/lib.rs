@@ -68,6 +68,8 @@ pub struct NodeSubtype {
 pub struct NodeMetadata {
     pub id: String,
     pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub role: NodeRole,
     pub config_aliases: Vec<String>,
     pub inputs: Vec<String>,

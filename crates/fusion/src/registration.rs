@@ -25,6 +25,7 @@ pub fn register_core_nodes() {
         NodeMetadata {
             id: "exampleSource".into(),
             display_name: "Example Source".into(),
+            description: None,
             role: NodeRole::Source,
             config_aliases: aliases(&["ExampleSource", "exampleSource"]),
             inputs: vec![],
@@ -51,6 +52,7 @@ pub fn register_core_nodes() {
         NodeMetadata {
             id: "exampleFilter".into(),
             display_name: "Example Filter".into(),
+            description: None,
             role: NodeRole::Filter,
             config_aliases: aliases(&["ExampleFilter", "exampleFilter"]),
             inputs: vec![],
@@ -73,6 +75,7 @@ pub fn register_core_nodes() {
         NodeMetadata {
             id: "exampleSink".into(),
             display_name: "Example Sink".into(),
+            description: None,
             role: NodeRole::Sink,
             config_aliases: aliases(&["ExampleSink", "exampleSink"]),
             inputs: vec![],
@@ -95,6 +98,7 @@ pub fn register_core_nodes() {
         NodeMetadata {
             id: "dataMonitor".into(),
             display_name: "Data Monitor".into(),
+            description: Some("Internal monitoring sink that tracks data flow rates, sample counts, and quality metrics for all connected sources.".into()),
             role: NodeRole::Sink,
             config_aliases: aliases(&["DataMonitor", "dataMonitor"]),
             inputs: vec![],

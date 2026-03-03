@@ -2,45 +2,35 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
-const OPENZEN_REPO: &str = "https://bitbucket.org/lpresearch/openzen.git";
-const OPENZEN_COMMIT: &str = "dd8d9269ccbbb5a3582ac4ecb622ae829f67aee7";
-
 fn main() {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let source_dir = manifest_dir.join("openzen");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let source_dir = out_dir.join("openzen-src");
     let build_dir = out_dir.join("build");
     let install_dir = out_dir.clone();
 
-    // Only clone if source doesn't exist yet (persists across incremental builds)
-    if !source_dir.join("CMakeLists.txt").exists() {
-        clone_and_prepare(&source_dir);
-    }
+    assert!(
+        source_dir.join("CMakeLists.txt").exists(),
+        "OpenZen submodule not initialised. Run: git submodule update --init --recursive"
+    );
 
-    // Build with cmake directly — avoid the cmake crate which overrides MSVC's
-    // default compiler flags (strips /O2, /DNDEBUG, /Zi from RelWithDebInfo).
     build_openzen(&source_dir, &build_dir, &install_dir);
 
-    // Link directives — import library is in lib/, DLL is in bin/ (Windows)
     println!(
         "cargo:rustc-link-search=native={}",
         install_dir.join("lib").display()
     );
     println!("cargo:rustc-link-lib=dylib=OpenZen");
 
-    // Copy DLL next to the final executable so it's found at runtime
     copy_dll_to_target(&install_dir);
 
-    // Only re-run build script if these files change
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=openzen/src");
 }
 
 fn build_openzen(source_dir: &PathBuf, build_dir: &PathBuf, install_dir: &PathBuf) {
     std::fs::create_dir_all(build_dir).expect("Failed to create build directory");
 
-    // Configure — use Visual Studio generator (reliable MSVC detection on
-    // Windows) with default compiler flags.  By NOT overriding CMAKE_C_FLAGS /
-    // CMAKE_CXX_FLAGS, cmake keeps its standard per-config defaults:
-    //   RelWithDebInfo -> /MD /Zi /O2 /Ob1 /DNDEBUG
     let status = Command::new("cmake")
         .arg(source_dir)
         .arg(format!("-B{}", build_dir.display()))
@@ -62,7 +52,6 @@ fn build_openzen(source_dir: &PathBuf, build_dir: &PathBuf, install_dir: &PathBu
         .expect("Failed to run cmake configure — is cmake installed?");
     assert!(status.success(), "cmake configure failed");
 
-    // Build with RelWithDebInfo configuration
     let status = Command::new("cmake")
         .args(["--build", &build_dir.display().to_string()])
         .args(["--config", "RelWithDebInfo"])
@@ -71,7 +60,6 @@ fn build_openzen(source_dir: &PathBuf, build_dir: &PathBuf, install_dir: &PathBu
         .expect("Failed to run cmake --build");
     assert!(status.success(), "cmake build failed");
 
-    // Install
     let status = Command::new("cmake")
         .args(["--install", &build_dir.display().to_string()])
         .args(["--config", "RelWithDebInfo"])
@@ -86,62 +74,18 @@ fn num_cpus() -> usize {
         .unwrap_or(4)
 }
 
-fn clone_and_prepare(dest: &PathBuf) {
-    println!("cargo:warning=Cloning OpenZen from {} ...", OPENZEN_REPO);
-
-    let status = Command::new("git")
-        .args(["clone", "--no-checkout", OPENZEN_REPO])
-        .arg(dest)
-        .status()
-        .expect("Failed to run `git clone` — is git installed?");
-    assert!(status.success(), "git clone failed");
-
-    let status = Command::new("git")
-        .args(["checkout", OPENZEN_COMMIT])
-        .current_dir(dest)
-        .status()
-        .expect("Failed to run `git checkout`");
-    assert!(status.success(), "git checkout failed");
-
-    // Only init the submodules we actually need (skip googletest, zmq, pybind11)
-    let required_submodules = [
-        "external/gsl",
-        "external/expected-lite",
-        "external/spdlog",
-        "external/asio",
-        "external/cereal",
-    ];
-
-    for sub in &required_submodules {
-        println!("cargo:warning=  Initialising submodule {} ...", sub);
-        let status = Command::new("git")
-            .args(["submodule", "update", "--init", sub])
-            .current_dir(dest)
-            .status()
-            .unwrap_or_else(|_| panic!("Failed to init submodule {}", sub));
-        assert!(status.success(), "git submodule update --init {} failed", sub);
-    }
-
-    println!("cargo:warning=OpenZen source ready at {}", dest.display());
-}
-
 fn copy_dll_to_target(cmake_install_dir: &PathBuf) {
-    // On Windows, OpenZen.dll and its companion DLLs (SiUSBXp, PCANBasic,
-    // ftd2xx) must be next to the executable or on PATH.  Copy everything
-    // from the cmake bin/ directory to the target profile directory.
     if cfg!(windows) {
         let bin_dir = cmake_install_dir.join("bin");
         if !bin_dir.exists() {
             return;
         }
 
-        // OUT_DIR is like: target/debug/build/openzen-sys-<hash>/out
-        // Walk up to:      target/debug/
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         let target_dir = match out_dir
-            .parent() // build/openzen-sys-<hash>
-            .and_then(|p| p.parent()) // build/
-            .and_then(|p| p.parent()) // target/debug/
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
         {
             Some(d) => d.to_path_buf(),
             None => return,
