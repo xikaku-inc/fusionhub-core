@@ -1,3 +1,6 @@
 [submodule "external/susi"]
 	path = external/susi
 	url = https://github.com/Trilion99/susi.git
+[submodule "crates/openzen-sys/openzen"]
+	path = crates/openzen-sys/openzen
+	url = https://bitbucket.org/lpresearch/openzen.git
