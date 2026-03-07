@@ -1587,8 +1587,11 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 name = "log_utils"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "env_logger",
  "log",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1621,9 +1624,11 @@ name = "mcp_server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "fusion_registry",
  "fusion_types",
  "log",
+ "networking",
  "rmcp",
  "schemars 0.8.22",
  "serde",
@@ -3498,11 +3503,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
  "crypto",
  "fusion_registry",
  "fusion_types",
  "include_dir",
  "log",
+ "log_utils",
  "mime_guess",
  "reqwest",
  "serde",

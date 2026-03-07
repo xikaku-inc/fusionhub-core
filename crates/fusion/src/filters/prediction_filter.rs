@@ -1,13 +1,24 @@
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{
     ApiRequest, FusedPose, FusedVehiclePose, FusedVehiclePoseV2, JsonValueExt, Quatd,
     StreamableData, Vec2d, Vec3d,
 };
 use nalgebra::{UnitQuaternion, Vector4};
+use serde_json::json;
 
 use crate::node::{CommandConsumerCallback, ConsumerCallback, Node};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("rotationInterval", "Rotation Interval (s)", "number", json!(0.0)),
+        sf("positionInterval", "Position Interval (s)", "number", json!(0.0)),
+        sf("predictPosition", "Predict Position", "boolean", json!(false)),
+        sf("fixedPredictionInterval", "Fixed Prediction Interval", "boolean", json!(true)),
+    ]
+}
 
 const D2R: f64 = std::f64::consts::PI / 180.0;
 

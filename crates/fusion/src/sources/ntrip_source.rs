@@ -4,9 +4,25 @@ use std::time::{Duration, SystemTime};
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{GnssData, JsonValueExt, RTCMData, StreamableData};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("host", "Host", "string", json!("192.168.1.1")),
+        sf("port", "Port", "number", json!(2101)),
+        sf("mountpoint", "Mountpoint", "string", json!("mountpoint")),
+        sf("user", "User", "string", json!("user")),
+        sf("password", "Password", "string", json!("password")),
+        sf("userAgent", "User Agent", "string", json!("LPVR-POS")),
+        sf("forwardGnss", "Forward GNSS", "boolean", json!(false)),
+        sf("initialLatitude", "Initial Latitude", "number", json!(0.0)),
+        sf("initialLongitude", "Initial Longitude", "number", json!(0.0)),
+    ]
+}
 
 const BASE64_TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

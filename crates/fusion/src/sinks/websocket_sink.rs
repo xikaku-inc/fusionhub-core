@@ -1,10 +1,18 @@
 use std::sync::Arc;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::StreamableData;
+use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::encoders::json_encoder::JsonEncoder;
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Port", "number", json!(8080)),
+    ]
+}
 
 /// WebSocket server sink that broadcasts StreamableData as JSON to all
 /// connected browser clients. Uses tokio-tungstenite for async WebSocket

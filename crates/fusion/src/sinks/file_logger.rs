@@ -1,10 +1,18 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::StreamableData;
+use serde_json::json;
 
 use crate::encoders::json_encoder::JsonEncoder;
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("filePath", "File Path", "string", json!("log.json")),
+    ]
+}
 
 /// Configuration for file rotation.
 #[derive(Clone, Debug)]

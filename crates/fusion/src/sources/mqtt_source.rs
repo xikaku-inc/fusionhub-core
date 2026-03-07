@@ -4,10 +4,22 @@ use std::time::Duration;
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{FusedVehiclePose, StreamableData};
+use serde_json::json;
 
 use crate::encoders::json_encoder::JsonDecoder;
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("host", "Host", "string", json!("192.168.1.200")),
+        sf("port", "Port", "number", json!(1883)),
+        sf("topic", "Topic", "string", json!("testTopic")),
+        sf("clientId", "Client ID", "string", json!("FusionHubSubscriber")),
+        sf("qos", "QoS", "number", json!(0)),
+    ]
+}
 
 /// MQTT subscriber source node.
 ///

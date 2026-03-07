@@ -11,9 +11,14 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::SettingsField;
 use fusion_types::{ImuData, JsonValueExt, StreamableData, Vec3d};
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![]
+}
 
 // Xreal vendor ID and Air 2 Ultra product ID
 const VENDOR_ID: u16 = 0x3318;

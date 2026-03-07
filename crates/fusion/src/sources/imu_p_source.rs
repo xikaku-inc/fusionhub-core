@@ -16,10 +16,18 @@ use std::time::SystemTime;
 use nalgebra::{UnitQuaternion, Vector3};
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{GnssData, ImuData, JsonValueExt, Quatd, StreamableData, Vec3d};
 use openzen_sys::*;
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("id", "Sensor ID", "string", json!("1")),
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // GNSS carrier-phase solution constants (from OpenZen ZenTypes.h)

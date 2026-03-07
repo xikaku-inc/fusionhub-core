@@ -5,8 +5,22 @@ use std::time::Duration;
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
+use serde_json::json;
+
 use crate::encoders::json_encoder::JsonDecoder;
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("filename", "File Path", "string", json!("")),
+        sf("playbackInterval", "Playback Interval (s)", "number", json!(0.001)),
+        sf("nSkipInitial", "Skip Initial Samples", "number", json!(0)),
+        sf("nStopAfter", "Stop After N Samples", "number", json!(0)),
+        sf("showProgress", "Show Progress", "boolean", json!(true)),
+        sf("loop", "Loop Playback", "boolean", json!(false)),
+    ]
+}
 
 /// Configuration for the file reader source.
 struct FileReaderConfig {

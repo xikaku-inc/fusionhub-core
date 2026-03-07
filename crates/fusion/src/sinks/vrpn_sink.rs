@@ -1,4 +1,14 @@
+use fusion_registry::{sf, SettingsField};
+use serde_json::json;
+
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Port", "number", json!(3883)),
+        sf("trackerName", "Tracker Name", "string", json!("FusionHub")),
+    ]
+}
 
 /// VRPN (Virtual-Reality Peripheral Network) output sink.
 ///

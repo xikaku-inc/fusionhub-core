@@ -1,11 +1,21 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::StreamableData;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
+use serde_json::json;
 
 use crate::encoders::json_encoder::JsonEncoder;
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("host", "Host", "string", json!("localhost")),
+        sf("port", "Port", "number", json!(1883)),
+        sf("topic", "Topic", "string", json!("fusionhub/output")),
+    ]
+}
 
 /// Encoding format for MQTT messages.
 #[derive(Clone, Debug, PartialEq)]

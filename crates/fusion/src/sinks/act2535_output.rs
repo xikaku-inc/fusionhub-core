@@ -1,9 +1,18 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{StreamableData, VelocityMeterData};
+use serde_json::json;
 
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Serial Port", "string", json!("")),
+        sf("baudRate", "Baud Rate", "number", json!(115200)),
+    ]
+}
 
 /// Format a velocity meter data line in the ACT2535 protocol format.
 ///

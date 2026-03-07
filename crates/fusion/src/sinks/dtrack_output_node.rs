@@ -1,8 +1,19 @@
 use std::sync::{Arc, Mutex};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{FusedPose, OpticalData, StreamableData};
+use serde_json::json;
 
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("host", "Host", "string", json!("127.0.0.1")),
+        sf("port", "Port", "number", json!(5001)),
+        sf("bodyId", "Body ID", "number", json!(0)),
+        sf("qualityThreshold", "Quality Threshold", "number", json!(0.0)),
+    ]
+}
 
 /// DTrack output format configuration.
 #[derive(Clone, Debug)]
