@@ -54,6 +54,7 @@ export default function NodeEditor() {
   const importedRef = useRef(false);
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Import config on first load
   useEffect(() => {
@@ -167,42 +168,37 @@ export default function NodeEditor() {
     }
   }, [nodes, edges, config]);
 
-  const handleLoadConfig = useCallback(async () => {
-    const path = window.prompt('Config file path:');
-    if (!path) return;
+  const handleLoadFile = useCallback(async (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    ev.target.value = '';
     try {
-      const result = await apiPost<any>('/api/config/load', { path });
-      if (result.status === 'OK' && result.config) {
-        useAppStore.getState().setConfig(result.config);
-        const { nodes: n, edges: e } = configToGraph(result.config);
-        setNodes(n);
-        setEdges(e);
-        setSelectedNode(null);
-      } else {
-        alert(result.error || 'Failed to load config');
-      }
-    } catch (e: any) {
-      alert('Failed to load config: ' + e.message);
+      const text = await file.text();
+      const loaded = JSON.parse(text);
+      await apiPost('/api/config', loaded);
+      useAppStore.getState().setConfig(loaded);
+      const graph = configToGraph(loaded);
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+      setSelectedNode(null);
+    } catch (err: any) {
+      alert('Failed to load config: ' + err.message);
     }
   }, [setNodes, setEdges]);
 
-  const handleSaveAs = useCallback(async () => {
-    const path = window.prompt('Save config as:');
-    if (!path) return;
+  const handleSaveAs = useCallback(() => {
     const newConfig = graphToConfig(nodes, edges, config?.settings || {});
     if (config?.LicenseInfo) {
       newConfig.LicenseInfo = config.LicenseInfo;
     }
-    try {
-      await apiPost('/api/config', newConfig);
-      useAppStore.getState().setConfig(newConfig);
-      const result = await apiPost<any>('/api/config/save-as', { path });
-      if (result.status !== 'OK') {
-        alert(result.error || 'Failed to save config');
-      }
-    } catch (e: any) {
-      alert('Failed to save config: ' + e.message);
-    }
+    const json = JSON.stringify(newConfig, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'config.json';
+    a.click();
+    URL.revokeObjectURL(url);
   }, [nodes, edges, config]);
 
   const handleDeleteSelected = useCallback(() => {
@@ -298,9 +294,10 @@ export default function NodeEditor() {
           />
           <Panel position="top-right">
             <div className="flex-row">
-              <button className="secondary" onClick={handleLoadConfig}>
+              <button className="secondary" onClick={() => fileInputRef.current?.click()}>
                 Load...
               </button>
+              <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleLoadFile} />
               <button className="secondary" onClick={handleImport}>
                 Reload
               </button>

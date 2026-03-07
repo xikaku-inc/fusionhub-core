@@ -35,12 +35,12 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
         const endpoint = cfg.dataEndpoint || cfg.outEndpoint || cfg.settings?.endpoints?.[0] || generateEndpoint(key, configKey);
         const normalizedEp = normalizeEndpoint(endpoint);
 
-        // Extract subtype from config
+        // Extract subtype from config (case-insensitive match against registry)
         let subtype: string | undefined;
-        if (nodeType.subtypes && cfg.type) {
-          subtype = cfg.type;
-        } else if (nodeType.subtypes && cfg.settings?.type) {
-          subtype = cfg.settings.type;
+        const rawType = cfg.type || cfg.settings?.type;
+        if (nodeType.subtypes && rawType) {
+          const lower = rawType.toLowerCase();
+          subtype = nodeType.subtypes.find((s) => s.value === lower)?.value || rawType;
         }
 
         const data: EditorNode = {
