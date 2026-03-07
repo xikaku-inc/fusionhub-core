@@ -149,6 +149,35 @@
   opacity: 0.5;
 }
 
+/* External Endpoint Nodes */
+.fh-external-node {
+  min-width: 100px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.fh-external-node .node-header.external-header {
+  border-radius: 14px;
+  padding: 5px 10px;
+  font-size: 10px;
+}
+
+.fh-external-node.selected {
+  box-shadow: none;
+}
+
+.fh-external-node .node-role-badge {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.fh-external-node .port-handle {
+  top: 50% !important;
+}
+
 .node-header {
   padding: 6px 10px;
   border-radius: 4px 4px 0 0;

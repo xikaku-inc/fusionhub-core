@@ -33,6 +33,9 @@ export function isValidConnection(
   // "any" handle on sinks accepts everything
   if (inputType === 'any') return true;
 
+  // ext handles are universal connectors (external TCP endpoints)
+  if (outputType === 'ext' || inputType === 'ext') return true;
+
   // Sinks with no specific inputs accept any
   if (targetData.nodeType.role === 'sink' && targetData.nodeType.inputs.length === 0) {
     return true;

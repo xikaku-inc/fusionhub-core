@@ -77,6 +77,31 @@ export default function PropertiesPanel({ node, onUpdateNode }: Props) {
   }
 
   const d = node.data as EditorNode;
+
+  if (d.externalDirection) {
+    return (
+      <div className="properties-panel">
+        <div className="properties-title">Properties</div>
+        <div className="properties-content">
+          <div className="prop-section">
+            <div className="prop-label">Type</div>
+            <div className="prop-value">
+              {d.externalDirection === 'input' ? 'External Input' : 'External Output'}
+            </div>
+          </div>
+          <div className="prop-section">
+            <div className="prop-label">TCP Endpoint</div>
+            <input
+              type="text"
+              value={d.endpoint}
+              onChange={(e) => onUpdateNode(node.id, { endpoint: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { nodeType } = d;
 
   const updateSetting = (key: string, value: any) => {

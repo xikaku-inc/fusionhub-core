@@ -2,9 +2,47 @@ import { type Node, type Edge } from '@xyflow/react';
 import { findNodeType, isFilterKey } from '../../../data/nodeRegistry';
 import type { DataType, EditorNode, NodeTypeDefinition } from '../../../types/nodes';
 import { generateEndpoint, resetEndpointCounter } from '../utils/endpointGenerator';
+import {
+  EXTERNAL_INPUT_TYPE,
+  EXTERNAL_OUTPUT_TYPE,
+  sanitizeEndpointId,
+  isTcpEndpoint,
+} from '../utils/externalNodeTypes';
 
 function normalizeEndpoint(ep: string): string {
   return ep.replace('tcp://*:', 'tcp://localhost:').replace('tcp://0.0.0.0:', 'tcp://localhost:');
+}
+
+function getOrCreateExternalInput(
+  endpoint: string,
+  normalizedEp: string,
+  nodes: Node[],
+  endpointToNodeId: Map<string, { nodeId: string; outputs: DataType[] }>,
+  externalInputNodes: Map<string, string>,
+  extInputCol: { v: number },
+): string {
+  const existing = externalInputNodes.get(normalizedEp);
+  if (existing) return existing;
+
+  const nodeId = `ext-in-${sanitizeEndpointId(normalizedEp)}`;
+  const data: EditorNode = {
+    configKey: nodeId,
+    nodeType: EXTERNAL_INPUT_TYPE,
+    settings: {},
+    endpoint,
+    disabled: false,
+    externalDirection: 'input',
+  };
+  nodes.push({
+    id: nodeId,
+    type: 'externalNode',
+    position: { x: -200, y: extInputCol.v * 100 + 50 },
+    data,
+  });
+  endpointToNodeId.set(normalizedEp, { nodeId, outputs: [] });
+  externalInputNodes.set(normalizedEp, nodeId);
+  extInputCol.v++;
+  return nodeId;
 }
 
 export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
@@ -12,12 +50,15 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
   const edges: Edge[] = [];
   const endpointToNodeId = new Map<string, { nodeId: string; outputs: DataType[] }>();
   const accumulatedEndpoints: string[] = [];
-  const deferredFilterEdges: { endpoint: string; nodeId: string; nodeType: NodeTypeDefinition }[] = [];
+  const deferredFilterEdges: { endpoint: string; rawEndpoint: string; nodeId: string; nodeType: NodeTypeDefinition }[] = [];
+  const externalInputNodes = new Map<string, string>();
   resetEndpointCounter();
 
   let sourceCol = 0;
   let filterCol = 0;
   let sinkCol = 0;
+  const extInputCol = { v: 0 };
+  let extOutputCol = 0;
 
   // 1. Parse sources
   if (config.sources) {
@@ -35,7 +76,6 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
         const endpoint = cfg.dataEndpoint || cfg.outEndpoint || cfg.settings?.endpoints?.[0] || generateEndpoint(key, configKey);
         const normalizedEp = normalizeEndpoint(endpoint);
 
-        // Extract subtype from config (case-insensitive match against registry)
         let subtype: string | undefined;
         const rawType = cfg.type || cfg.settings?.type;
         if (nodeType.subtypes && rawType) {
@@ -68,11 +108,17 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
       }
     }
 
-    // Handle explicit endpoints array
+    // Handle explicit endpoints array — create external input nodes for TCP entries
     if (config.sources.endpoints) {
       const eps = Array.isArray(config.sources.endpoints) ? config.sources.endpoints : [config.sources.endpoints];
       for (const ep of eps) {
-        if (typeof ep === 'string') accumulatedEndpoints.push(normalizeEndpoint(ep));
+        if (typeof ep !== 'string') continue;
+        const normalized = normalizeEndpoint(ep);
+        accumulatedEndpoints.push(normalized);
+
+        if (isTcpEndpoint(ep)) {
+          getOrCreateExternalInput(ep, normalized, nodes, endpointToNodeId, externalInputNodes, extInputCol);
+        }
       }
     }
   }
@@ -129,7 +175,16 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                   });
                 }
               }
-              if (!source.outputs.some((o) => nodeType.inputs.includes(o))) {
+              // Fallback: external input nodes have empty outputs, create untyped edge
+              if (source.outputs.length === 0) {
+                edges.push({
+                  id: `e-${source.nodeId}-${nodeId}-ext`,
+                  source: source.nodeId,
+                  target: nodeId,
+                  sourceHandle: 'out-ext',
+                  targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
+                });
+              } else if (!source.outputs.some((o) => nodeType.inputs.includes(o))) {
                 edges.push({
                   id: `e-${source.nodeId}-${nodeId}`,
                   source: source.nodeId,
@@ -138,9 +193,19 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                   targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : undefined,
                 });
               }
+            } else if (isTcpEndpoint(iep)) {
+              // Unresolved TCP endpoint — create external input node
+              const extNodeId = getOrCreateExternalInput(iep, normalized, nodes, endpointToNodeId, externalInputNodes, extInputCol);
+              edges.push({
+                id: `e-${extNodeId}-${nodeId}-ext`,
+                source: extNodeId,
+                target: nodeId,
+                sourceHandle: 'out-ext',
+                targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
+              });
             } else {
               // Source not yet processed (filter ordering) — defer
-              deferredFilterEdges.push({ endpoint: normalized, nodeId, nodeType });
+              deferredFilterEdges.push({ endpoint: normalized, rawEndpoint: iep, nodeId, nodeType });
             }
           }
         } else {
@@ -148,15 +213,25 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           for (const aep of accumulatedEndpoints) {
             const source = endpointToNodeId.get(aep);
             if (source) {
-              for (const outType of source.outputs) {
-                if (nodeType.inputs.includes(outType)) {
-                  edges.push({
-                    id: `e-${source.nodeId}-${nodeId}-${outType}`,
-                    source: source.nodeId,
-                    target: nodeId,
-                    sourceHandle: `out-${outType}`,
-                    targetHandle: `in-${outType}`,
-                  });
+              if (source.outputs.length === 0) {
+                edges.push({
+                  id: `e-${source.nodeId}-${nodeId}-ext`,
+                  source: source.nodeId,
+                  target: nodeId,
+                  sourceHandle: 'out-ext',
+                  targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
+                });
+              } else {
+                for (const outType of source.outputs) {
+                  if (nodeType.inputs.includes(outType)) {
+                    edges.push({
+                      id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                      source: source.nodeId,
+                      target: nodeId,
+                      sourceHandle: `out-${outType}`,
+                      targetHandle: `in-${outType}`,
+                    });
+                  }
                 }
               }
             }
@@ -175,26 +250,49 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
   // 2b. Resolve deferred filter edges (filters referencing other filters processed later)
   for (const deferred of deferredFilterEdges) {
     const source = endpointToNodeId.get(deferred.endpoint);
-    if (!source) continue;
-    const targetNodeType = deferred.nodeType;
-    for (const outType of source.outputs) {
-      if (targetNodeType.inputs.includes(outType)) {
+    if (source) {
+      const targetNodeType = deferred.nodeType;
+      if (source.outputs.length === 0) {
         edges.push({
-          id: `e-${source.nodeId}-${deferred.nodeId}-${outType}`,
+          id: `e-${source.nodeId}-${deferred.nodeId}-ext`,
           source: source.nodeId,
           target: deferred.nodeId,
-          sourceHandle: `out-${outType}`,
-          targetHandle: `in-${outType}`,
+          sourceHandle: 'out-ext',
+          targetHandle: targetNodeType.inputs.length > 0 ? `in-${targetNodeType.inputs[0]}` : 'in-any',
         });
+      } else {
+        for (const outType of source.outputs) {
+          if (targetNodeType.inputs.includes(outType)) {
+            edges.push({
+              id: `e-${source.nodeId}-${deferred.nodeId}-${outType}`,
+              source: source.nodeId,
+              target: deferred.nodeId,
+              sourceHandle: `out-${outType}`,
+              targetHandle: `in-${outType}`,
+            });
+          }
+        }
+        if (!source.outputs.some((o) => targetNodeType.inputs.includes(o))) {
+          edges.push({
+            id: `e-${source.nodeId}-${deferred.nodeId}`,
+            source: source.nodeId,
+            target: deferred.nodeId,
+            sourceHandle: source.outputs.length > 0 ? `out-${source.outputs[0]}` : undefined,
+            targetHandle: targetNodeType.inputs.length > 0 ? `in-${targetNodeType.inputs[0]}` : undefined,
+          });
+        }
       }
-    }
-    if (!source.outputs.some((o) => targetNodeType.inputs.includes(o))) {
+    } else if (isTcpEndpoint(deferred.rawEndpoint)) {
+      // Still unresolved TCP endpoint — create external input node
+      const extNodeId = getOrCreateExternalInput(
+        deferred.rawEndpoint, deferred.endpoint, nodes, endpointToNodeId, externalInputNodes, extInputCol,
+      );
       edges.push({
-        id: `e-${source.nodeId}-${deferred.nodeId}`,
-        source: source.nodeId,
+        id: `e-${extNodeId}-${deferred.nodeId}-ext`,
+        source: extNodeId,
         target: deferred.nodeId,
-        sourceHandle: source.outputs.length > 0 ? `out-${source.outputs[0]}` : undefined,
-        targetHandle: targetNodeType.inputs.length > 0 ? `in-${targetNodeType.inputs[0]}` : undefined,
+        sourceHandle: 'out-ext',
+        targetHandle: deferred.nodeType.inputs.length > 0 ? `in-${deferred.nodeType.inputs[0]}` : 'in-any',
       });
     }
   }
@@ -234,17 +332,38 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           const source = endpointToNodeId.get(normalized);
           if (source) {
             const hasSpecificInputs = nodeType.inputs.length > 0;
-            for (const outType of source.outputs) {
-              if (!hasSpecificInputs || nodeType.inputs.includes(outType)) {
-                edges.push({
-                  id: `e-${source.nodeId}-${nodeId}-${outType}`,
-                  source: source.nodeId,
-                  target: nodeId,
-                  sourceHandle: `out-${outType}`,
-                  targetHandle: hasSpecificInputs ? `in-${outType}` : 'in-any',
-                });
+            if (source.outputs.length === 0) {
+              edges.push({
+                id: `e-${source.nodeId}-${nodeId}-ext`,
+                source: source.nodeId,
+                target: nodeId,
+                sourceHandle: 'out-ext',
+                targetHandle: hasSpecificInputs ? `in-${nodeType.inputs[0]}` : 'in-any',
+              });
+            } else {
+              for (const outType of source.outputs) {
+                if (!hasSpecificInputs || nodeType.inputs.includes(outType)) {
+                  edges.push({
+                    id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                    source: source.nodeId,
+                    target: nodeId,
+                    sourceHandle: `out-${outType}`,
+                    targetHandle: hasSpecificInputs ? `in-${outType}` : 'in-any',
+                  });
+                }
               }
             }
+          } else if (isTcpEndpoint(iep)) {
+            // Unresolved TCP endpoint — create external input node
+            const extNodeId = getOrCreateExternalInput(iep, normalized, nodes, endpointToNodeId, externalInputNodes, extInputCol);
+            const hasSpecificInputs = nodeType.inputs.length > 0;
+            edges.push({
+              id: `e-${extNodeId}-${nodeId}-ext`,
+              source: extNodeId,
+              target: nodeId,
+              sourceHandle: 'out-ext',
+              targetHandle: hasSpecificInputs ? `in-${nodeType.inputs[0]}` : 'in-any',
+            });
           }
         }
       } else {
@@ -253,15 +372,25 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           const source = endpointToNodeId.get(aep);
           if (source) {
             const hasSpecificInputs = nodeType.inputs.length > 0;
-            for (const outType of source.outputs) {
-              if (!hasSpecificInputs || nodeType.inputs.includes(outType)) {
-                edges.push({
-                  id: `e-${source.nodeId}-${nodeId}-${outType}`,
-                  source: source.nodeId,
-                  target: nodeId,
-                  sourceHandle: `out-${outType}`,
-                  targetHandle: hasSpecificInputs ? `in-${outType}` : 'in-any',
-                });
+            if (source.outputs.length === 0) {
+              edges.push({
+                id: `e-${source.nodeId}-${nodeId}-ext`,
+                source: source.nodeId,
+                target: nodeId,
+                sourceHandle: 'out-ext',
+                targetHandle: hasSpecificInputs ? `in-${nodeType.inputs[0]}` : 'in-any',
+              });
+            } else {
+              for (const outType of source.outputs) {
+                if (!hasSpecificInputs || nodeType.inputs.includes(outType)) {
+                  edges.push({
+                    id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                    source: source.nodeId,
+                    target: nodeId,
+                    sourceHandle: `out-${outType}`,
+                    targetHandle: hasSpecificInputs ? `in-${outType}` : 'in-any',
+                  });
+                }
               }
             }
           }
@@ -270,6 +399,44 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
 
       sinkCol++;
     }
+  }
+
+  // 4. Create external output nodes for TCP dataEndpoints
+  const extOutputSeen = new Set<string>();
+  const internalNodes = nodes.filter((n) => !(n.data as EditorNode).externalDirection);
+  for (const node of internalNodes) {
+    const d = node.data as EditorNode;
+    if (!d.endpoint || !isTcpEndpoint(d.endpoint)) continue;
+
+    const normalized = normalizeEndpoint(d.endpoint);
+    if (extOutputSeen.has(normalized)) continue;
+    extOutputSeen.add(normalized);
+
+    const extNodeId = `ext-out-${sanitizeEndpointId(normalized)}`;
+    const extData: EditorNode = {
+      configKey: extNodeId,
+      nodeType: EXTERNAL_OUTPUT_TYPE,
+      settings: {},
+      endpoint: d.endpoint,
+      disabled: false,
+      externalDirection: 'output',
+    };
+
+    nodes.push({
+      id: extNodeId,
+      type: 'externalNode',
+      position: { x: 1000, y: extOutputCol * 100 + 50 },
+      data: extData,
+    });
+
+    edges.push({
+      id: `e-${node.id}-${extNodeId}-ext`,
+      source: node.id,
+      target: extNodeId,
+      sourceHandle: d.nodeType.outputs.length > 0 ? `out-${d.nodeType.outputs[0]}` : undefined,
+      targetHandle: 'in-ext',
+    });
+    extOutputCol++;
   }
 
   return { nodes, edges };

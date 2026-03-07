@@ -49,4 +49,5 @@ export interface EditorNode extends Record<string, unknown> {
   endpoint: string;
   disabled: boolean;
   originalConfig?: any;
+  externalDirection?: 'input' | 'output';
 }
