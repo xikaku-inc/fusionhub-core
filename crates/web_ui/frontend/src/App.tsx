@@ -4,6 +4,7 @@ import Layout from './components/Layout/Layout';
 import Dashboard from './components/Dashboard/Dashboard';
 import LicenseView from './components/License/LicenseView';
 import NodeEditor from './components/NodeEditor/NodeEditor';
+import Logs from './components/Logs/Logs';
 import ExtensionLoader from './components/Extensions/ExtensionLoader';
 import { useSSE } from './hooks/useSSE';
 import { useAppStore } from './stores/appStore';
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/license" element={<LicenseView />} />
           <Route path="/node-editor" element={<NodeEditor />} />
+          <Route path="/logs" element={<Logs />} />
           {activeExtensions.map((ext) => (
             <Route key={ext.id} path={ext.route} element={<ExtensionLoader key={ext.id} extension={ext} />} />
           ))}

@@ -10,6 +10,7 @@ interface LayoutProps {
 const coreNavItems = [
   { path: '/dashboard', label: 'Dashboard' },
   { path: '/node-editor', label: 'Node Editor' },
+  { path: '/logs', label: 'Logs' },
   { path: '/license', label: 'License' },
 ];
 

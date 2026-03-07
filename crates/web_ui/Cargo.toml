@@ -19,3 +19,5 @@ websocket_server = { path = "../websocket_server" }
 reqwest = { version = "0.12", features = ["json"] }
 include_dir = "0.7"
 mime_guess = "2"
+log_utils = { path = "../log_utils" }
+chrono = { workspace = true }

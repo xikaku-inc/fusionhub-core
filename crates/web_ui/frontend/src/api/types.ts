@@ -77,6 +77,7 @@ export interface LicenseInfo {
   expires: string | null;
   lease_expires: string | null;
   machine_code: string;
+  license_key: string;
   error: string;
 }
 
@@ -129,4 +130,11 @@ export interface McpStatus {
   lastTool: string | null;
   lastToolTime: string | null;
   recentTools: McpToolCallEntry[];
+}
+
+export interface LogEntry {
+  ts: string;
+  level: string;
+  target: string;
+  message: string;
 }
