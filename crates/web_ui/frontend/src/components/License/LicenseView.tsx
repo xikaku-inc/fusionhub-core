@@ -41,10 +41,11 @@ export default function LicenseView() {
 
   // Auto-fetch machines when license is valid and a key is available
   useEffect(() => {
-    if (license.info.valid && license.licenseKey && license.serverUrl && license.machines.length === 0 && !license.machinesLoading) {
+    const key = license.licenseKey || license.info.license_key;
+    if (license.info.valid && key && license.serverUrl && license.machines.length === 0 && !license.machinesLoading) {
       fetchMachines();
     }
-  }, [license.info.valid, license.licenseKey, license.serverUrl, license.machines.length, license.machinesLoading, fetchMachines]);
+  }, [license.info.valid, license.licenseKey, license.info.license_key, license.serverUrl, license.machines.length, license.machinesLoading, fetchMachines]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,7 +69,7 @@ export default function LicenseView() {
               <tr><td>Expires</td><td>{formatExpiry(license.info.expires)}</td></tr>
               <tr><td>Lease Expires</td><td>{formatExpiry(license.info.lease_expires)}</td></tr>
               <tr><td>Machine Code</td><td style={{ fontFamily: 'monospace', fontSize: 11 }}>{license.info.machine_code || '-'}</td></tr>
-              {license.licenseKey && <tr><td>License Key</td><td style={{ fontFamily: 'monospace', fontSize: 11 }}>{license.licenseKey}</td></tr>}
+              {(license.info.license_key || license.licenseKey) && <tr><td>License Key</td><td style={{ fontFamily: 'monospace', fontSize: 11 }}>{license.info.license_key || license.licenseKey}</td></tr>}
               {license.info.error && <tr><td>Error</td><td className="error-text">{license.info.error}</td></tr>}
             </tbody>
           </table>

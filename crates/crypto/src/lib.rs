@@ -15,6 +15,7 @@ pub struct LicenseInfo {
     pub expires: Option<String>,
     pub lease_expires: Option<String>,
     pub machine_code: String,
+    pub license_key: String,
     pub error: String,
 }
 
@@ -94,6 +95,7 @@ fn status_to_info(status: &LicenseStatus, machine_code: &str) -> LicenseInfo {
             expires: payload.expires.as_ref().map(format_dt),
             lease_expires: payload.lease_expires.as_ref().map(format_dt),
             machine_code: machine_code.into(),
+            license_key: payload.license_key.clone(),
             error: String::new(),
         },
         LicenseStatus::ValidGracePeriod { payload, lease_expired_at } => LicenseInfo {
@@ -105,6 +107,7 @@ fn status_to_info(status: &LicenseStatus, machine_code: &str) -> LicenseInfo {
             expires: payload.expires.as_ref().map(format_dt),
             lease_expires: Some(format_dt(lease_expired_at)),
             machine_code: machine_code.into(),
+            license_key: payload.license_key.clone(),
             error: format!("Lease expired at {}, renew ASAP", lease_expired_at.format("%Y-%m-%d %H:%M")),
         },
         LicenseStatus::Expired { expired_at } => LicenseInfo {
