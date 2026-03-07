@@ -9,9 +9,8 @@ export type DataType =
 export interface SettingsField {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'select' | 'quaternion' | 'vector3' | 'json';
+  type: 'string' | 'number' | 'boolean' | 'quaternion' | 'vector3' | 'json';
   default: any;
-  options?: { value: string; label: string }[];
 }
 
 export interface NodeSubtype {

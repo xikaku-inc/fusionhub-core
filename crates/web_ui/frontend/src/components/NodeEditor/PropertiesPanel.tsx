@@ -19,16 +19,6 @@ function SettingsFieldInput({ field, value, onChange }: { field: SettingsField; 
           {field.label}
         </label>
       );
-    case 'select':
-      return (
-        <div className="select-wrapper">
-          <select value={value ?? field.default ?? ''} onChange={(e) => onChange(e.target.value)}>
-            {field.options?.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      );
     case 'quaternion': {
       const q = value ?? field.default ?? { w: 1, x: 0, y: 0, z: 0 };
       return (
@@ -144,16 +134,11 @@ export default function PropertiesPanel({ node, onUpdateNode }: Props) {
         {nodeType.subtypes && nodeType.subtypes.length > 0 && (
           <div className="prop-section">
             <div className="prop-label">Subtype</div>
-            <div className="select-wrapper">
-              <select
-                value={d.subtype || ''}
-                onChange={(e) => onUpdateNode(node.id, { subtype: e.target.value })}
-              >
-                {nodeType.subtypes.map((s) => (
-                  <option key={s.value} value={s.value}>{s.displayName}</option>
-                ))}
-              </select>
-            </div>
+            <input
+              type="text"
+              value={d.subtype || ''}
+              onChange={(e) => onUpdateNode(node.id, { subtype: e.target.value })}
+            />
           </div>
         )}
 
