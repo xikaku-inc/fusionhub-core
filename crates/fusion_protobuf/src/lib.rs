@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fusion_types::{
+    encode_extension_proto, decode_extension_proto, ExtensionEnvelope,
     CANData, FusedPose, FusedVehiclePose, FusedVehiclePoseV2, FusionStateInt, GlobalFusedPose,
     GnssData, GpsPoint, ImuData, OpticalData, RTCMData, StreamableData, Vec2d, Vec3d,
     VehicleSpeed, VehicleState, VelocityMeterData,
@@ -163,6 +164,17 @@ impl ProtobufEncoder {
             }
             StreamableData::Timestamp(_) => {
                 sd.sequence_number = self.next_seq();
+            }
+            StreamableData::Extension(e) => {
+                sd.sequence_number = self.next_seq();
+                let payload = encode_extension_proto(&e.type_name, e.payload_any())
+                    .unwrap_or_default();
+                sd.extension_data = Some(proto::ExtensionData {
+                    type_name: e.type_name.clone(),
+                    payload,
+                    timestamp: time_to_nanos(&e.timestamp),
+                    sender_id: e.sender_id.clone(),
+                });
             }
         }
 
@@ -454,6 +466,16 @@ pub fn decode(bytes: &[u8]) -> Option<StreamableData> {
     }
     if let Some(ref d) = sd.velocity_meter_data {
         return Some(StreamableData::VelocityMeter(decode_velocity_meter(d)));
+    }
+    if let Some(ref d) = sd.extension_data {
+        if let Some(payload) = decode_extension_proto(&d.type_name, &d.payload) {
+            return Some(StreamableData::Extension(ExtensionEnvelope::from_parts(
+                d.type_name.clone(),
+                d.sender_id.clone(),
+                nanos_to_time(d.timestamp),
+                payload,
+            )));
+        }
     }
 
     None

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use fusion_types::StreamableData;
+use fusion_types::{encode_extension_json, decode_extension_json, ExtensionEnvelope, StreamableData};
 
 /// Serialize StreamableData to a JSON string with a C++-compatible wrapper.
 /// The output is `{"<typeName>": <serialized>}` where typeName matches the C++ key.
@@ -10,6 +10,9 @@ impl JsonEncoder {
     /// The output matches the C++ JsonEncoder format:
     /// `{"imuData": {...}}`, `{"fusedPose": {...}}`, etc.
     pub fn encode(data: &StreamableData) -> Result<String> {
+        if let StreamableData::Extension(e) = data {
+            return encode_extension_wrapper(e);
+        }
         let (wrapper_key, inner) = match data {
             StreamableData::Imu(d) => ("imuData", serde_json::to_value(d)?),
             StreamableData::Gnss(d) => ("gnssData", serde_json::to_value(d)?),
@@ -27,6 +30,7 @@ impl JsonEncoder {
             StreamableData::VehicleSpeed(d) => ("VehicleSpeed", serde_json::to_value(d)?),
             StreamableData::VelocityMeter(d) => ("VelocityMeterData", serde_json::to_value(d)?),
             StreamableData::Timestamp(d) => ("Timestamp", serde_json::to_value(d)?),
+            StreamableData::Extension(_) => unreachable!(),
         };
         let wrapper = serde_json::json!({ wrapper_key: inner });
         serde_json::to_string(&wrapper).context("Failed to encode StreamableData to JSON")
@@ -34,6 +38,9 @@ impl JsonEncoder {
 
     /// Encode StreamableData to a pretty-printed JSON string.
     pub fn encode_pretty(data: &StreamableData) -> Result<String> {
+        if let StreamableData::Extension(e) = data {
+            return encode_extension_wrapper_pretty(e);
+        }
         let (wrapper_key, inner) = match data {
             StreamableData::Imu(d) => ("imuData", serde_json::to_value(d)?),
             StreamableData::Gnss(d) => ("gnssData", serde_json::to_value(d)?),
@@ -51,6 +58,7 @@ impl JsonEncoder {
             StreamableData::VehicleSpeed(d) => ("VehicleSpeed", serde_json::to_value(d)?),
             StreamableData::VelocityMeter(d) => ("VelocityMeterData", serde_json::to_value(d)?),
             StreamableData::Timestamp(d) => ("Timestamp", serde_json::to_value(d)?),
+            StreamableData::Extension(_) => unreachable!(),
         };
         let wrapper = serde_json::json!({ wrapper_key: inner });
         serde_json::to_string_pretty(&wrapper)
@@ -108,7 +116,25 @@ impl JsonDecoder {
                 "Timestamp" => Ok(StreamableData::Timestamp(serde_json::from_value(
                     data.clone(),
                 )?)),
-                _ => anyhow::bail!("Unknown StreamableData type key: '{}'", key),
+                other => {
+                    if let Some(obj) = data.as_object() {
+                        let sender_id = obj
+                            .get("senderId")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_owned();
+                        let payload_val = obj.get("payload").unwrap_or(data);
+                        if let Some(payload) = decode_extension_json(other, payload_val) {
+                            return Ok(StreamableData::Extension(ExtensionEnvelope::from_parts(
+                                other.to_owned(),
+                                sender_id,
+                                std::time::SystemTime::now(),
+                                payload,
+                            )));
+                        }
+                    }
+                    anyhow::bail!("Unknown StreamableData type key: '{}'", other)
+                }
             };
         }
 
@@ -119,6 +145,22 @@ impl JsonDecoder {
     pub fn decode_direct(json_str: &str) -> Result<StreamableData> {
         serde_json::from_str(json_str).context("Failed to decode StreamableData from JSON")
     }
+}
+
+fn encode_extension_wrapper(e: &ExtensionEnvelope) -> Result<String> {
+    let payload = encode_extension_json(&e.type_name, e.payload_any())
+        .unwrap_or(serde_json::Value::Null);
+    let inner = serde_json::json!({ "senderId": e.sender_id, "payload": payload });
+    let wrapper = serde_json::json!({ &e.type_name: inner });
+    serde_json::to_string(&wrapper).context("Failed to encode Extension to JSON")
+}
+
+fn encode_extension_wrapper_pretty(e: &ExtensionEnvelope) -> Result<String> {
+    let payload = encode_extension_json(&e.type_name, e.payload_any())
+        .unwrap_or(serde_json::Value::Null);
+    let inner = serde_json::json!({ "senderId": e.sender_id, "payload": payload });
+    let wrapper = serde_json::json!({ &e.type_name: inner });
+    serde_json::to_string_pretty(&wrapper).context("Failed to encode Extension to pretty JSON")
 }
 
 #[cfg(test)]

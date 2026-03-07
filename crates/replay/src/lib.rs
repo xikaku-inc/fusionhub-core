@@ -57,6 +57,7 @@ fn extract_sender_and_time(data: &StreamableData) -> (String, SystemTime) {
         StreamableData::VehicleSpeed(d) => (d.sender_id.clone(), d.timestamp),
         StreamableData::VelocityMeter(d) => (d.sender_id.clone(), d.timestamp),
         StreamableData::Timestamp(d) => ("<timestamp>".to_owned(), d.now),
+        StreamableData::Extension(e) => (e.sender_id.clone(), e.timestamp),
     }
 }
 
@@ -77,6 +78,7 @@ fn data_type_label(data: &StreamableData) -> &'static str {
         StreamableData::VehicleSpeed(_) => "VSPD",
         StreamableData::VelocityMeter(_) => "VMD",
         StreamableData::Timestamp(_) => "TS",
+        StreamableData::Extension(_) => "EXT",
     }
 }
 
