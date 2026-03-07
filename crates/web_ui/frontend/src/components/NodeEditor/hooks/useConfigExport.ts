@@ -8,9 +8,18 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     sinks: {},
   };
 
-  const sourceNodes = nodes.filter((n) => (n.data as EditorNode).nodeType.role === 'source');
-  const filterNodes = nodes.filter((n) => (n.data as EditorNode).nodeType.role === 'filter');
-  const sinkNodes = nodes.filter((n) => (n.data as EditorNode).nodeType.role === 'sink');
+  const sourceNodes = nodes.filter((n) => {
+    const d = n.data as EditorNode;
+    return d.nodeType.role === 'source' && !d.externalDirection;
+  });
+  const filterNodes = nodes.filter((n) => {
+    const d = n.data as EditorNode;
+    return d.nodeType.role === 'filter' && !d.externalDirection;
+  });
+  const sinkNodes = nodes.filter((n) => {
+    const d = n.data as EditorNode;
+    return d.nodeType.role === 'sink' && !d.externalDirection;
+  });
 
   // Helper: get input endpoints for a node from edges
   const getInputEndpoints = (nodeId: string): string[] => {
@@ -28,12 +37,24 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     return endpoints;
   };
 
+  // Collect external input endpoints for sources.endpoints
+  const externalInputEndpoints: string[] = [];
+  for (const node of nodes) {
+    const d = node.data as EditorNode;
+    if (d.externalDirection === 'input' && d.endpoint) {
+      if (!externalInputEndpoints.includes(d.endpoint)) {
+        externalInputEndpoints.push(d.endpoint);
+      }
+    }
+  }
+  if (externalInputEndpoints.length > 0) {
+    config.sources.endpoints = externalInputEndpoints;
+  }
+
   // Build sources
-  // Group by original config key (handle arrays: multiple nodes with same base key)
   const sourceGroups = new Map<string, { configs: any[]; disabled: boolean }>();
   for (const node of sourceNodes) {
     const d = node.data as EditorNode;
-    // Strip instance suffix (e.g., "imu_0" -> "imu")
     const baseKey = d.configKey.replace(/_\d+$/, '');
     const prefix = d.disabled ? '_' : '';
     const key = prefix + baseKey;
@@ -82,6 +103,18 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
       nodeConfig.settings = d.settings;
     }
 
+    // If connected to an external output node, use its endpoint as dataEndpoint
+    const outgoingEdges = edges.filter((e) => e.source === node.id);
+    for (const edge of outgoingEdges) {
+      const targetNode = nodes.find((n) => n.id === edge.target);
+      if (targetNode) {
+        const td = targetNode.data as EditorNode;
+        if (td.externalDirection === 'output' && td.endpoint) {
+          nodeConfig.dataEndpoint = td.endpoint;
+        }
+      }
+    }
+
     config.sinks[key] = nodeConfig;
   }
 
@@ -105,7 +138,6 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
       nodeConfig.settings = d.settings;
     }
 
-    // Only add non-empty configs (empty object {} for sinks like echo is fine)
     config.sinks[key] = Object.keys(nodeConfig).length > 0 ? nodeConfig : {};
   }
 

@@ -25,6 +25,7 @@ import { getNodeRate } from './utils/nodeStatusMapper';
 import SourceNode from './nodes/SourceNode';
 import FilterNode from './nodes/FilterNode';
 import SinkNode from './nodes/SinkNode';
+import ExternalNode from './nodes/ExternalNode';
 import NodePalette from './NodePalette';
 import PropertiesPanel from './PropertiesPanel';
 import type { NodeTypeDefinition, EditorNode } from '../../types/nodes';
@@ -34,6 +35,7 @@ const nodeTypes = {
   sourceNode: SourceNode,
   filterNode: FilterNode,
   sinkNode: SinkNode,
+  externalNode: ExternalNode,
 };
 
 const nodeTypeToFlowType: Record<string, string> = {
@@ -226,6 +228,29 @@ export default function NodeEditor() {
         x: event.clientX,
         y: event.clientY,
       });
+
+      // Handle external node types
+      if (nodeType.id === '_external_input' || nodeType.id === '_external_output') {
+        const direction = nodeType.id === '_external_input' ? 'input' : 'output';
+        const endpoint = `tcp://localhost:${direction === 'input' ? 8900 : 8901}`;
+        const nodeId = `ext-${direction === 'input' ? 'in' : 'out'}-${Date.now()}`;
+
+        const newNode: Node = {
+          id: nodeId,
+          type: 'externalNode',
+          position,
+          data: {
+            configKey: nodeId,
+            nodeType,
+            settings: {},
+            endpoint,
+            disabled: false,
+            externalDirection: direction,
+          } as EditorNode,
+        };
+        setNodes((nds) => [...nds, newNode]);
+        return;
+      }
 
       const existingKeys = nodes.map((n) => (n.data as EditorNode).configKey);
       let configKey = nodeType.id;

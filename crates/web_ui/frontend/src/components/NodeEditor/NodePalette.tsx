@@ -1,6 +1,7 @@
 import { type DragEvent } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import type { NodeTypeDefinition, NodeRole } from '../../types/nodes';
+import { EXTERNAL_INPUT_TYPE, EXTERNAL_OUTPUT_TYPE } from './utils/externalNodeTypes';
 
 const roles: { role: NodeRole; label: string }[] = [
   { role: 'source', label: 'Sources' },
@@ -42,6 +43,31 @@ export default function NodePalette() {
           </div>
         );
       })}
+      <div className="palette-section">
+        <div className="palette-section-title">External</div>
+        <div
+          className="palette-item"
+          style={{ borderLeftColor: EXTERNAL_INPUT_TYPE.color }}
+          draggable
+          onDragStart={(e) => onDragStart(e, EXTERNAL_INPUT_TYPE)}
+        >
+          <span className="palette-item-name">TCP Input</span>
+          <span className="palette-item-io">
+            <span className="palette-outputs">ext</span>
+          </span>
+        </div>
+        <div
+          className="palette-item"
+          style={{ borderLeftColor: EXTERNAL_OUTPUT_TYPE.color }}
+          draggable
+          onDragStart={(e) => onDragStart(e, EXTERNAL_OUTPUT_TYPE)}
+        >
+          <span className="palette-item-name">TCP Output</span>
+          <span className="palette-item-io">
+            <span className="palette-inputs">ext</span>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
