@@ -10,9 +10,18 @@ use std::time::{Duration, SystemTime};
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{ImuData, JsonValueExt, StreamableData, Vec3d};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("axisConfigAcc", "Accelerometer Axis Config", "string", json!("+X+Y+Z")),
+        sf("axisConfigGyro", "Gyroscope Axis Config", "string", json!("+X+Y+Z")),
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // Axis remapping configuration

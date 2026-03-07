@@ -1,9 +1,21 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{FusedVehiclePoseV2, GlobalFusedPose, StreamableData};
+use serde_json::json;
 
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("transport", "Transport", "string", json!("serial")),
+        sf("port", "Serial Port", "string", json!("COM1")),
+        sf("baudRate", "Baud Rate", "number", json!(115200)),
+        sf("host", "Host", "string", json!("127.0.0.1")),
+        sf("nmeaPort", "Network Port", "number", json!(9000)),
+    ]
+}
 
 /// Output transport for NMEA sentences.
 #[derive(Clone, Debug)]

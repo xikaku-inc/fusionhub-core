@@ -1,15 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use fusion_registry::{
-    NodeMetadata, NodeRole, SettingsField,
-    extract_settings,
+    NodeMetadata, NodeRole,
+    defaults_from_schema, extract_settings,
 };
 use fusion_types::JsonValueExt;
 use serde_json::json;
-
-fn sf(key: &str, label: &str, ft: &str, default: serde_json::Value) -> SettingsField {
-    SettingsField { key: key.into(), label: label.into(), field_type: ft.into(), default, options: None }
-}
 
 fn aliases(a: &[&str]) -> Vec<String> {
     a.iter().map(|s| s.to_string()).collect()
@@ -30,10 +26,8 @@ pub fn register_core_nodes() {
             config_aliases: aliases(&["ExampleSource", "exampleSource"]),
             inputs: vec![],
             outputs: vec!["Timestamp".into()],
-            default_settings: json!({"intervalMs": 1000}),
-            settings_schema: vec![
-                sf("intervalMs", "Interval (ms)", "number", json!(1000)),
-            ],
+            settings_schema: crate::sources::example_source::settings_schema(),
+            default_settings: defaults_from_schema(&crate::sources::example_source::settings_schema()),
             subtypes: None,
             required_feature: None,
             supports_realtime_config: false,

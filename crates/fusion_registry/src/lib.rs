@@ -39,20 +39,12 @@ pub enum NodeRole {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SelectOption {
-    pub value: String,
-    pub label: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsField {
     pub key: String,
     pub label: String,
     #[serde(rename = "type")]
     pub field_type: String,
     pub default: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub options: Option<Vec<SelectOption>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,7 +208,7 @@ pub fn get_ui_extension_bundle(id: &str) -> Option<&'static [u8]> {
 }
 
 // ---------------------------------------------------------------------------
-// Helper for node builders
+// Helpers for node builders & schema definition
 // ---------------------------------------------------------------------------
 
 pub fn extract_settings(config: &Value) -> Value {
@@ -224,4 +216,23 @@ pub fn extract_settings(config: &Value) -> Value {
         .get("settings")
         .cloned()
         .unwrap_or_else(|| config.clone())
+}
+
+pub fn sf(key: &str, label: &str, ft: &str, default: Value) -> SettingsField {
+    SettingsField { key: key.into(), label: label.into(), field_type: ft.into(), default }
+}
+
+pub fn defaults_from_schema(schema: &[SettingsField]) -> Value {
+    let mut map = serde_json::Map::new();
+    for field in schema {
+        if let Some((parent, child)) = field.key.split_once('.') {
+            let nested = map.entry(parent).or_insert_with(|| Value::Object(serde_json::Map::new()));
+            if let Value::Object(ref mut m) = nested {
+                m.insert(child.into(), field.default.clone());
+            }
+        } else {
+            map.insert(field.key.clone(), field.default.clone());
+        }
+    }
+    Value::Object(map)
 }

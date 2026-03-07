@@ -5,25 +5,31 @@
 //! it at compile time, so the DLL is always available next to the executable.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{ImuData, JsonValueExt, Quatd, StreamableData, Vec3d};
 use openzen_sys::*;
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("name", "Sensor Name", "string", json!("")),
+        sf("onDeviceAutocalibration", "On-Device Autocalibration", "boolean", json!(false)),
+        sf("autodetectType", "Autodetect Type", "string", json!("ig1")),
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // OpenZenImuSource
 // ---------------------------------------------------------------------------
 
 /// OpenZen IMU source node.
-///
-/// Discovers LP-Research IMU sensors via the OpenZen library, connects to the
-/// first matching device (or a named one), and streams IMU data to downstream
-/// consumers.
 pub struct OpenZenImuSource {
     pub base: NodeBase,
 
@@ -38,6 +44,7 @@ pub struct OpenZenImuSource {
     // Runtime
     m_done: Arc<AtomicBool>,
     m_worker_handle: Option<JoinHandle<()>>,
+    m_connected_sensor: Arc<Mutex<String>>,
 }
 
 impl OpenZenImuSource {
@@ -85,6 +92,7 @@ impl OpenZenImuSource {
             m_id: id,
             m_done: Arc::new(AtomicBool::new(false)),
             m_worker_handle: None,
+            m_connected_sensor: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -106,6 +114,7 @@ impl Node for OpenZenImuSource {
         let configure_frequency = self.m_configure_frequency;
         let id = self.m_id.clone();
         let on_device_autocal = self.m_on_device_autocalibration;
+        let connected_sensor = self.m_connected_sensor.clone();
 
         done.store(false, Ordering::Relaxed);
 
@@ -206,11 +215,9 @@ impl Node for OpenZenImuSource {
                     }
                 };
 
-                log::info!(
-                    "Connecting to sensor: name='{}' serial='{}'",
-                    desc.name_str(),
-                    desc.serial_number_str()
-                );
+                let sensor_display = format!("{} ({})", desc.name_str(), desc.serial_number_str());
+                log::info!("Connecting to sensor: {}", sensor_display);
+                *connected_sensor.lock().unwrap() = sensor_display;
 
                 // 4. Obtain sensor -----------------------------------------------
                 let mut sensor_handle = ZenSensorHandle_t { handle: 0 };
@@ -502,5 +509,14 @@ impl Node for OpenZenImuSource {
 
     fn receive_data(&mut self, _data: StreamableData) {
         // Source node does not consume upstream data.
+    }
+
+    fn status(&self) -> serde_json::Value {
+        let sensor = self.m_connected_sensor.lock().unwrap();
+        if sensor.is_empty() {
+            serde_json::json!({ "sensor": "discovering..." })
+        } else {
+            serde_json::json!({ "sensor": *sensor })
+        }
     }
 }

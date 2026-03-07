@@ -7,9 +7,25 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use nalgebra::{Isometry3, Matrix3, Rotation3, Translation3, UnitQuaternion, Vector3};
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{JsonValueExt, OpticalData, StreamableData, Vec3d};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Port", "number", json!(5000)),
+        sf("multicastGroup", "Multicast Group", "string", json!("")),
+        sf("timeout", "Timeout (ms)", "number", json!(100)),
+        sf("roomDirections", "Room Directions", "json", json!({})),
+        sf("bodyDirections", "Body Directions", "json", json!({})),
+        sf("roomOffset", "Room Offset", "vector3", json!({"x": 0, "y": 0, "z": 0})),
+        sf("worldTrafo", "World Transform", "json", json!({})),
+        sf("refToOpticalQuat", "Ref-to-Optical Rotation", "quaternion", json!({"w": 1, "x": 0, "y": 0, "z": 0})),
+        sf("refToOpticalVec", "Ref-to-Optical Translation", "vector3", json!({"x": 0, "y": 0, "z": 0})),
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // Coordinate frame utilities

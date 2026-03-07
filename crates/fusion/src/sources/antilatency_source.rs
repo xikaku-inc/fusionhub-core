@@ -7,9 +7,14 @@ use libloading::Library;
 use nalgebra::UnitQuaternion;
 use tokio::task::JoinHandle;
 
+use fusion_registry::SettingsField;
 use fusion_types::{OpticalData, StreamableData, Vec3d};
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![]
+}
 
 // ---------------------------------------------------------------------------
 // Antilatency COM-like interface types

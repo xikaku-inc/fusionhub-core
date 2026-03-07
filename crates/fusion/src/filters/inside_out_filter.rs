@@ -1,9 +1,22 @@
 use std::sync::{Arc, Mutex};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{ApiRequest, FusedPose, JsonValueExt, OpticalData, StreamableData, Vec3d};
 use nalgebra::{Quaternion, UnitQuaternion};
+use serde_json::json;
 
 use crate::node::{CommandConsumerCallback, ConsumerCallback, Node};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("ioLpWeight", "IO Low-Pass Weight", "number", json!(0.999)),
+        sf("ioHpWeight", "IO High-Pass Weight", "number", json!(0.3)),
+        sf("optLpWeight", "Optical Low-Pass Weight", "number", json!(0.999)),
+        sf("useIOHeight", "Use IO Height", "boolean", json!(false)),
+        sf("useIOHorizontal", "Use IO Horizontal", "boolean", json!(false)),
+        sf("predictionTimeModifier", "Prediction Time Modifier", "number", json!(0.02)),
+    ]
+}
 
 /// Faithful port of C++ Fusion::InsideOutFilter.
 ///

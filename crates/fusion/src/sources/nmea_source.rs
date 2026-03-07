@@ -5,9 +5,21 @@ use std::time::{Duration, SystemTime};
 use nalgebra::UnitQuaternion;
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{GnssData, StreamableData, Timestamp, Vec3d};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Serial Port", "string", json!("COM1")),
+        sf("baudrate", "Baud Rate", "number", json!(115200)),
+        sf("dualGPS", "Dual GPS", "boolean", json!(false)),
+        sf("initializeUnicore", "Initialize Unicore", "boolean", json!(true)),
+        sf("gnssOutputPeriodMS", "Output Period (ms)", "number", json!(100)),
+    ]
+}
 
 const PI: f64 = std::f64::consts::PI;
 

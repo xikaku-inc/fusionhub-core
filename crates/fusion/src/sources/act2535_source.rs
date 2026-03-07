@@ -4,10 +4,20 @@ use std::time::{Duration, Instant, SystemTime};
 
 use tokio::task::JoinHandle;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{StreamableData, VehicleSpeed, VelocityMeterData};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
 use crate::sources::act2535_data_format::parse_act2535_line;
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("port", "Serial Port", "string", json!("COM10")),
+        sf("baudrate", "Baud Rate", "number", json!(115200)),
+        sf("hwFlowControl", "HW Flow Control", "boolean", json!(true)),
+    ]
+}
 
 const STX: u8 = 0x02;
 const ETX: u8 = 0x03;

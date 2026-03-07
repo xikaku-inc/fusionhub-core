@@ -1,9 +1,17 @@
 use std::sync::{Arc, Mutex};
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::StreamableData;
 use networking::DiskWriter;
+use serde_json::json;
 
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("filePath", "File Path", "string", json!("recording.json")),
+    ]
+}
 
 /// Simple file recorder that writes StreamableData as JSON lines to disk
 /// using the networking::DiskWriter.

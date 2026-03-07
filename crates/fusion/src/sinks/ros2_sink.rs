@@ -1,6 +1,15 @@
+use fusion_registry::{sf, SettingsField};
 use fusion_types::StreamableData;
+use serde_json::json;
 
 use crate::node::{Node, NodeBase};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("topic", "Topic", "string", json!("/fusionhub/pose")),
+        sf("frameId", "Frame ID", "string", json!("map")),
+    ]
+}
 
 /// ROS 2 topic publisher sink.
 ///

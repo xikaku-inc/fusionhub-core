@@ -1,15 +1,19 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use fusion_registry::{sf, SettingsField};
 use fusion_types::{StreamableData, Timestamp};
+use serde_json::json;
 
 use crate::node::{Node, NodeBase, ConsumerCallback};
 
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("intervalMs", "Interval (ms)", "number", json!(1000)),
+    ]
+}
+
 /// Example source node that emits a Timestamp at a configurable interval.
-///
-/// This is a minimal reference implementation showing how to build a source
-/// node. Sources produce data on a periodic heartbeat and forward it to
-/// downstream consumers via `notify_consumers`.
 pub struct ExampleSource {
     pub base: NodeBase,
     m_interval: Duration,
