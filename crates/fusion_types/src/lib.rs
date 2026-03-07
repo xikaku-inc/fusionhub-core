@@ -1,3 +1,6 @@
+use std::any::Any;
+use std::fmt;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use nalgebra::{Isometry3, Matrix3, Rotation3, UnitQuaternion, Vector2, Vector3};
@@ -915,6 +918,185 @@ impl Timestamp {
 }
 
 // ---------------------------------------------------------------------------
+// 15b. Extension message codec registry
+// ---------------------------------------------------------------------------
+
+pub struct ExtensionCodec {
+    pub type_name: &'static str,
+    pub json_encode: fn(&dyn Any) -> Option<serde_json::Value>,
+    pub json_decode: fn(&serde_json::Value) -> Option<Box<dyn Any + Send + Sync>>,
+    pub proto_encode: fn(&dyn Any) -> Vec<u8>,
+    pub proto_decode: fn(&[u8]) -> Option<Box<dyn Any + Send + Sync>>,
+}
+
+static EXT_CODEC_REGISTRY: OnceLock<Mutex<Vec<ExtensionCodec>>> = OnceLock::new();
+
+fn ext_codec_registry() -> &'static Mutex<Vec<ExtensionCodec>> {
+    EXT_CODEC_REGISTRY.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub fn register_extension_codec(codec: ExtensionCodec) {
+    ext_codec_registry().lock().unwrap().push(codec);
+}
+
+pub fn encode_extension_json(type_name: &str, payload: &dyn Any) -> Option<serde_json::Value> {
+    let reg = ext_codec_registry().lock().unwrap();
+    reg.iter()
+        .find(|c| c.type_name == type_name)
+        .and_then(|c| (c.json_encode)(payload))
+}
+
+pub fn decode_extension_json(
+    type_name: &str,
+    value: &serde_json::Value,
+) -> Option<Box<dyn Any + Send + Sync>> {
+    let reg = ext_codec_registry().lock().unwrap();
+    reg.iter()
+        .find(|c| c.type_name == type_name)
+        .and_then(|c| (c.json_decode)(value))
+}
+
+pub fn encode_extension_proto(type_name: &str, payload: &dyn Any) -> Option<Vec<u8>> {
+    let reg = ext_codec_registry().lock().unwrap();
+    reg.iter()
+        .find(|c| c.type_name == type_name)
+        .map(|c| (c.proto_encode)(payload))
+}
+
+pub fn decode_extension_proto(
+    type_name: &str,
+    bytes: &[u8],
+) -> Option<Box<dyn Any + Send + Sync>> {
+    let reg = ext_codec_registry().lock().unwrap();
+    reg.iter()
+        .find(|c| c.type_name == type_name)
+        .and_then(|c| (c.proto_decode)(bytes))
+}
+
+pub fn extension_codec_type_names() -> Vec<&'static str> {
+    let reg = ext_codec_registry().lock().unwrap();
+    reg.iter().map(|c| c.type_name).collect()
+}
+
+// ---------------------------------------------------------------------------
+// 15c. ExtensionEnvelope
+// ---------------------------------------------------------------------------
+
+pub struct ExtensionEnvelope {
+    pub type_name: String,
+    pub sender_id: String,
+    pub timestamp: SystemTime,
+    payload: Arc<dyn Any + Send + Sync>,
+}
+
+impl ExtensionEnvelope {
+    pub fn new<T: Send + Sync + 'static>(
+        type_name: impl Into<String>,
+        sender_id: impl Into<String>,
+        timestamp: SystemTime,
+        data: T,
+    ) -> Self {
+        Self {
+            type_name: type_name.into(),
+            sender_id: sender_id.into(),
+            timestamp,
+            payload: Arc::new(data),
+        }
+    }
+
+    pub fn from_parts(
+        type_name: impl Into<String>,
+        sender_id: impl Into<String>,
+        timestamp: SystemTime,
+        payload: Box<dyn Any + Send + Sync>,
+    ) -> Self {
+        Self {
+            type_name: type_name.into(),
+            sender_id: sender_id.into(),
+            timestamp,
+            payload: Arc::from(payload),
+        }
+    }
+
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.payload.downcast_ref::<T>()
+    }
+
+    pub fn payload_any(&self) -> &dyn Any {
+        &*self.payload
+    }
+}
+
+impl Clone for ExtensionEnvelope {
+    fn clone(&self) -> Self {
+        Self {
+            type_name: self.type_name.clone(),
+            sender_id: self.sender_id.clone(),
+            timestamp: self.timestamp,
+            payload: Arc::clone(&self.payload),
+        }
+    }
+}
+
+impl fmt::Debug for ExtensionEnvelope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExtensionEnvelope")
+            .field("type_name", &self.type_name)
+            .field("sender_id", &self.sender_id)
+            .field("timestamp", &self.timestamp)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Serialize for ExtensionEnvelope {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let payload_json = encode_extension_json(&self.type_name, &*self.payload);
+        let mut state = serializer.serialize_struct("ExtensionEnvelope", 4)?;
+        state.serialize_field("typeName", &self.type_name)?;
+        state.serialize_field("senderId", &self.sender_id)?;
+        state.serialize_field(
+            "timestamp",
+            &self
+                .timestamp
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_nanos(),
+        )?;
+        state.serialize_field("payload", &payload_json)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ExtensionEnvelope {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Raw {
+            type_name: String,
+            sender_id: String,
+            timestamp: u128,
+            payload: Option<serde_json::Value>,
+        }
+        let raw = Raw::deserialize(deserializer)?;
+        let timestamp =
+            SystemTime::UNIX_EPOCH + Duration::from_nanos(raw.timestamp as u64);
+        let payload: Arc<dyn Any + Send + Sync> = raw
+            .payload
+            .as_ref()
+            .and_then(|v| decode_extension_json(&raw.type_name, v))
+            .map(|b| Arc::from(b) as Arc<dyn Any + Send + Sync>)
+            .unwrap_or_else(|| Arc::new(()) as Arc<dyn Any + Send + Sync>);
+        Ok(Self {
+            type_name: raw.type_name,
+            sender_id: raw.sender_id,
+            timestamp,
+            payload,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 16. StreamableData
 // ---------------------------------------------------------------------------
 
@@ -934,6 +1116,7 @@ pub enum StreamableData {
     VehicleSpeed(VehicleSpeed),
     VelocityMeter(VelocityMeterData),
     Timestamp(Timestamp),
+    Extension(ExtensionEnvelope),
 }
 
 impl StreamableData {
@@ -954,6 +1137,15 @@ impl StreamableData {
             Self::VehicleSpeed(_) => "VehicleSpeed",
             Self::VelocityMeter(_) => "VelocityMeter",
             Self::Timestamp(_) => "Timestamp",
+            Self::Extension(_) => "Extension",
+        }
+    }
+
+    /// Get the extension type name (only for Extension variants).
+    pub fn extension_type_name(&self) -> Option<&str> {
+        match self {
+            Self::Extension(e) => Some(&e.type_name),
+            _ => None,
         }
     }
 
@@ -974,6 +1166,7 @@ impl StreamableData {
             Self::VehicleSpeed(d) => Some(&d.sender_id),
             Self::VelocityMeter(d) => Some(&d.sender_id),
             Self::Timestamp(_) => None,
+            Self::Extension(e) => Some(&e.sender_id),
         }
     }
 
@@ -994,6 +1187,7 @@ impl StreamableData {
             Self::VehicleSpeed(d) => d.sender_id = id.to_owned(),
             Self::VelocityMeter(d) => d.sender_id = id.to_owned(),
             Self::Timestamp(_) => {}
+            Self::Extension(e) => e.sender_id = id.to_owned(),
         }
     }
 
@@ -1014,6 +1208,7 @@ impl StreamableData {
             Self::VehicleSpeed(d) => Some(d.timestamp),
             Self::VelocityMeter(d) => Some(d.timestamp),
             Self::Timestamp(t) => Some(t.now),
+            Self::Extension(e) => Some(e.timestamp),
         }
     }
 
@@ -1034,6 +1229,7 @@ impl StreamableData {
             Self::VehicleSpeed(d) => d.timestamp = ts,
             Self::VelocityMeter(d) => d.timestamp = ts,
             Self::Timestamp(t) => t.now = ts,
+            Self::Extension(e) => e.timestamp = ts,
         }
     }
 

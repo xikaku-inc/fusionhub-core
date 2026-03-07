@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use fusion_types::StreamableData;
+use fusion_types::{encode_extension_json, StreamableData};
 
 /// Encodes StreamableData directly as the inner data object, without a type wrapper.
 /// Useful for external consumers that expect a flat JSON object.
@@ -51,6 +51,11 @@ impl PlainJsonEncoder {
             StreamableData::Timestamp(d) => {
                 serde_json::to_string(d).context("Failed to encode Timestamp")
             }
+            StreamableData::Extension(e) => {
+                let payload = encode_extension_json(&e.type_name, e.payload_any())
+                    .unwrap_or(serde_json::Value::Null);
+                serde_json::to_string(&payload).context("Failed to encode Extension")
+            }
         }
     }
 
@@ -81,6 +86,11 @@ impl PlainJsonEncoder {
                 serde_json::to_string_pretty(d).context("encode")
             }
             StreamableData::Timestamp(d) => serde_json::to_string_pretty(d).context("encode"),
+            StreamableData::Extension(e) => {
+                let payload = encode_extension_json(&e.type_name, e.payload_any())
+                    .unwrap_or(serde_json::Value::Null);
+                serde_json::to_string_pretty(&payload).context("encode")
+            }
         }
     }
 
@@ -101,6 +111,7 @@ impl PlainJsonEncoder {
             StreamableData::VehicleSpeed(_) => "VehicleSpeed",
             StreamableData::VelocityMeter(_) => "VelocityMeterData",
             StreamableData::Timestamp(_) => "Timestamp",
+            StreamableData::Extension(_) => "Extension",
         }
     }
 }

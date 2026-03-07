@@ -199,6 +199,7 @@ impl DataMonitor {
             StreamableData::VehicleState(d) => (d.sender_id.clone(), "VehicleState"),
             StreamableData::VehicleSpeed(d) => (d.sender_id.clone(), "VehicleSpeed"),
             StreamableData::VelocityMeter(d) => (d.sender_id.clone(), "VelocityMeter"),
+            StreamableData::Extension(e) => (e.sender_id.clone(), "Extension"),
             StreamableData::Timestamp(_) => return,
         };
 
