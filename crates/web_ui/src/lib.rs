@@ -129,6 +129,107 @@ impl WebUiServer {
             }
         });
 
+        // Forward log entries to SSE with per-target rate aggregation.
+        // High-frequency targets (>10 msgs/sec) get suppressed into periodic
+        // summary lines so they don't flood the UI.
+        if let Some(mut log_rx) = log_utils::subscribe() {
+            let log_sse_tx = sse_tx.clone();
+            tokio::spawn(async move {
+                use std::collections::HashMap;
+                const RATE_THRESHOLD: u32 = 10;
+
+                struct TargetStats {
+                    count: u32,
+                    level: String,
+                    last_msg: String,
+                }
+                let mut target_counts: HashMap<String, TargetStats> = HashMap::new();
+                let mut suppressed: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
+
+                let mut tick =
+                    tokio::time::interval(Duration::from_secs(1));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+                let mut pending: Vec<Value> = Vec::new();
+
+                loop {
+                    tokio::select! {
+                        result = log_rx.recv() => {
+                            match result {
+                                Ok(raw) => {
+                                    if let Ok(entry) = serde_json::from_str::<Value>(&raw) {
+                                        let target = entry["target"]
+                                            .as_str()
+                                            .unwrap_or("")
+                                            .to_owned();
+
+                                        let stats = target_counts
+                                            .entry(target.clone())
+                                            .or_insert_with(|| TargetStats {
+                                                count: 0,
+                                                level: String::new(),
+                                                last_msg: String::new(),
+                                            });
+                                        stats.count += 1;
+                                        stats.level = entry["level"]
+                                            .as_str()
+                                            .unwrap_or("INFO")
+                                            .to_owned();
+                                        stats.last_msg = entry["message"]
+                                            .as_str()
+                                            .unwrap_or("")
+                                            .to_owned();
+
+                                        if !suppressed.contains(&target) {
+                                            pending.push(entry);
+                                        }
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                                Err(_) => break,
+                            }
+                        }
+                        _ = tick.tick() => {
+                            // Emit summaries for high-frequency targets.
+                            for (target, stats) in &target_counts {
+                                if stats.count > RATE_THRESHOLD {
+                                    suppressed.insert(target.clone());
+                                    pending.push(json!({
+                                        "ts": chrono::Local::now()
+                                            .format("%H:%M:%S%.3f")
+                                            .to_string(),
+                                        "level": stats.level,
+                                        "target": target,
+                                        "message": format!(
+                                            "{}/s (suppressed) — {}",
+                                            stats.count, stats.last_msg
+                                        ),
+                                    }));
+                                }
+                            }
+                            // Only unsuppress targets that had zero messages
+                            // this tick (completely silent).
+                            suppressed.retain(|t| target_counts.contains_key(t));
+                            target_counts.clear();
+
+                            if !pending.is_empty() {
+                                let entries: Vec<Value> = pending.drain(..).collect();
+                                let event = json!({ "type": "log", "data": entries });
+                                let _ = log_sse_tx.send(event.to_string());
+                            }
+                        }
+                    }
+
+                    if pending.len() >= 30 {
+                        let entries: Vec<Value> = pending.drain(..).collect();
+                        let event = json!({ "type": "log", "data": entries });
+                        let _ = log_sse_tx.send(event.to_string());
+                    }
+                }
+            });
+        }
+
         let bind_addr = format!("{}:{}", addr, port);
 
         let app = Router::new()
@@ -152,6 +253,7 @@ impl WebUiServer {
                 post(api_apply_intercalibration),
             )
             .route("/api/forward", post(api_forward))
+            .route("/api/logs", get(api_get_logs))
             // Node types (dynamic registry)
             .route("/api/node-types", get(api_get_node_types))
             // UI extensions (dynamic registry)
@@ -285,7 +387,14 @@ impl WebUiServer {
     pub async fn update_license_status(&self, info: LicenseInfo) {
         let mut s = self.state.lock().await;
         s.license_info = info.clone();
-        let event = json!({ "type": "licenseStatus", "data": info });
+        let event = json!({
+            "type": "licenseStatus",
+            "data": {
+                "info": info,
+                "licenseKey": s.license_key,
+                "serverUrl": s.license_server_url,
+            }
+        });
         let _ = s.sse_tx.send(event.to_string());
     }
 
@@ -525,6 +634,14 @@ async fn api_get_version() -> Json<Value> {
     Json(json!({ "version": VERSION_NUMBER }))
 }
 
+async fn api_get_logs() -> Json<Value> {
+    let entries: Vec<Value> = log_utils::buffered_entries()
+        .into_iter()
+        .filter_map(|s| serde_json::from_str(&s).ok())
+        .collect();
+    Json(json!(entries))
+}
+
 async fn api_get_node_types() -> Json<Value> {
     let metadata = fusion_registry::all_metadata();
     Json(serde_json::to_value(metadata).unwrap_or_default())
@@ -644,7 +761,10 @@ async fn api_check_license_file(
 
     let mut s = state.lock().await;
     s.license_info = info.clone();
-    let event = json!({ "type": "licenseStatus", "data": &info });
+    let event = json!({
+        "type": "licenseStatus",
+        "data": { "info": &info, "licenseKey": &s.license_key, "serverUrl": &s.license_server_url }
+    });
     let _ = s.sse_tx.send(event.to_string());
     if info.valid {
         s.is_reset = true;
@@ -718,7 +838,10 @@ async fn api_check_license_server(
         li.insert("ServerUrl".into(), json!(server_url));
         s.config["LicenseInfo"] = json!(li);
     }
-    let event = json!({ "type": "licenseStatus", "data": &info });
+    let event = json!({
+        "type": "licenseStatus",
+        "data": { "info": &info, "licenseKey": &s.license_key, "serverUrl": &s.license_server_url }
+    });
     let _ = s.sse_tx.send(event.to_string());
     if info.valid {
         s.is_reset = true;
@@ -741,7 +864,10 @@ async fn api_check_license_token(State(state): State<SharedState>) -> Json<Value
 
     let mut s = state.lock().await;
     s.license_info = info.clone();
-    let event = json!({ "type": "licenseStatus", "data": &info });
+    let event = json!({
+        "type": "licenseStatus",
+        "data": { "info": &info, "licenseKey": &s.license_key, "serverUrl": &s.license_server_url }
+    });
     let _ = s.sse_tx.send(event.to_string());
     if info.valid {
         s.is_reset = true;
@@ -789,7 +915,10 @@ async fn api_upload_license(
 
             let mut s = state.lock().await;
             s.license_info = info.clone();
-            let event = json!({ "type": "licenseStatus", "data": &info });
+            let event = json!({
+                "type": "licenseStatus",
+                "data": { "info": &info, "licenseKey": &s.license_key, "serverUrl": &s.license_server_url }
+            });
             let _ = s.sse_tx.send(event.to_string());
             if info.valid {
                 s.is_reset = true;

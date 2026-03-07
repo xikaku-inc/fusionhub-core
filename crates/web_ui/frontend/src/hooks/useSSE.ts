@@ -73,9 +73,13 @@ export function useSSE() {
           state.setIntercalibrationStatus(data);
           break;
 
-        case 'licenseStatus':
-          state.setLicenseInfo(data);
+        case 'licenseStatus': {
+          const info = data.info || data;
+          state.setLicenseInfo(info);
+          if (data.licenseKey) state.setLicenseField('licenseKey', data.licenseKey);
+          if (data.serverUrl) state.setLicenseField('serverUrl', data.serverUrl);
           break;
+        }
 
         case 'fusedPose': {
           const now = Date.now();
@@ -111,6 +115,16 @@ export function useSSE() {
         case 'mcpStatus':
           state.setMcpStatus(data);
           break;
+
+        case 'aiMonitorStatus':
+          state.setAiMonitorStatus(data);
+          break;
+
+        case 'log':
+          if (Array.isArray(data)) {
+            state.addLogEntries(data);
+          }
+          break;
       }
     }
 
@@ -118,7 +132,7 @@ export function useSSE() {
       'config', 'status', 'inputStatus',
       'getIntercalibrationStatus', 'intercalibrationResult',
       'licenseStatus', 'fusedPose', 'opticalData', 'fusedVehiclePose',
-      'nodeStatuses', 'mcpStatus',
+      'nodeStatuses', 'mcpStatus', 'aiMonitorStatus', 'log',
     ];
 
     for (const type of eventTypes) {

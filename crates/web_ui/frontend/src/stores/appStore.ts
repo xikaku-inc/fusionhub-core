@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiGet, apiPost, apiPostFormData } from '../api/client';
-import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload, McpStatus } from '../api/types';
+import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload, McpStatus, LogEntry } from '../api/types';
 import type { NodeTypeDefinition, UiExtension } from '../types/nodes';
 
 interface AppState {
@@ -61,6 +61,15 @@ interface AppState {
   mcpStatus: McpStatus | null;
   setMcpStatus: (s: McpStatus) => void;
 
+  // AI Monitor
+  aiMonitorStatus: any;
+  setAiMonitorStatus: (s: any) => void;
+
+  // Logs
+  logEntries: LogEntry[];
+  addLogEntries: (entries: LogEntry[]) => void;
+  clearLogEntries: () => void;
+
   // License
   license: {
     info: LicenseInfo;
@@ -103,7 +112,7 @@ const defaultIntercalibrationStatus: IntercalibrationStatus = {
 };
 
 const defaultLicenseInfo: LicenseInfo = {
-  valid: false, status: 'not_checked', customer: '', product: '', features: [], expires: null, lease_expires: null, machine_code: '', error: '',
+  valid: false, status: 'not_checked', customer: '', product: '', features: [], expires: null, lease_expires: null, machine_code: '', license_key: '', error: '',
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -229,6 +238,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   mcpStatus: null,
   setMcpStatus: (s) => set({ mcpStatus: s }),
 
+  aiMonitorStatus: null,
+  setAiMonitorStatus: (s) => set({ aiMonitorStatus: s }),
+
+  // Logs
+  logEntries: [],
+  addLogEntries: (entries) => set((s) => {
+    const combined = s.logEntries.concat(entries);
+    return { logEntries: combined.length > 2000 ? combined.slice(-2000) : combined };
+  }),
+  clearLogEntries: () => set({ logEntries: [] }),
+
   // License
   license: {
     info: defaultLicenseInfo,
@@ -335,11 +355,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   fetchMachines: async () => {
     const { license } = get();
-    if (!license.licenseKey || !license.serverUrl) return;
+    const key = license.licenseKey || license.info.license_key;
+    if (!key || !license.serverUrl) return;
     set((s) => ({ license: { ...s.license, machinesLoading: true, machinesError: '' } }));
     try {
       const data = await apiPost<any>('/api/license/machines', {
-        licenseKey: license.licenseKey,
+        licenseKey: key,
         serverUrl: license.serverUrl,
       });
       if (data.status === 'OK' && data.data) {
@@ -355,10 +376,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deactivateMachine: async (machineCode: string) => {
     const { license } = get();
+    const key = license.licenseKey || license.info.license_key;
     set((s) => ({ license: { ...s.license, machinesLoading: true, machinesError: '' } }));
     try {
       const data = await apiPost<any>('/api/license/deactivate-machine', {
-        licenseKey: license.licenseKey,
+        licenseKey: key,
         serverUrl: license.serverUrl,
         machineCode,
       });
