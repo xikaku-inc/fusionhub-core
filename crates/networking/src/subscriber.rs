@@ -104,68 +104,81 @@ impl Subscriber {
                 let resolved = resolve_endpoint_for_connect(&ep);
 
                 let task = handle.spawn(async move {
-                    let mut socket = SubSocket::new();
-
-                    if let Err(e) = socket.subscribe("").await {
-                        log::error!("Subscriber [{}] subscribe error: {}", ep, e);
-                        return;
-                    }
-
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(3),
-                        socket.connect(&resolved),
-                    )
-                    .await
-                    {
-                        Ok(Ok(())) => {
-                            log::info!("Subscriber connected to {} (from {})", resolved, ep);
-                        }
-                        Ok(Err(e)) => {
-                            log::warn!(
-                                "Subscriber failed to connect to {} (from {}): {}",
-                                resolved, ep, e
-                            );
-                            return;
-                        }
-                        Err(_) => {
-                            log::warn!(
-                                "Subscriber connect timed out for {} (from {}); skipping",
-                                resolved, ep
-                            );
-                            return;
-                        }
-                    }
-
+                    const RECV_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+                    let mut was_connected = false;
                     loop {
-                        match socket.recv().await {
-                            Ok(msg) => {
-                                let bytes: Vec<u8> = msg
-                                    .into_vec()
-                                    .first()
-                                    .cloned()
-                                    .map(|frame| frame.to_vec())
-                                    .unwrap_or_default();
+                        let mut socket = SubSocket::new();
 
-                                match fusion_protobuf::decode(&bytes) {
-                                    Some(data) => {
-                                        if tx.send(data).is_err() {
-                                            break;
+                        if let Err(e) = socket.subscribe("").await {
+                            log::error!("Subscriber [{}] subscribe error: {}", ep, e);
+                            return;
+                        }
+
+                        match socket.connect(&resolved).await {
+                            Ok(()) => {}
+                            Err(e) => {
+                                if !was_connected {
+                                    log::warn!(
+                                        "Subscriber [{}] connect failed: {}; retrying...", ep, e
+                                    );
+                                }
+                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                                continue;
+                            }
+                        }
+
+                        loop {
+                            match tokio::time::timeout(RECV_TIMEOUT, socket.recv()).await {
+                                Ok(Ok(msg)) => {
+                                    let bytes: Vec<u8> = msg
+                                        .into_vec()
+                                        .first()
+                                        .cloned()
+                                        .map(|frame| frame.to_vec())
+                                        .unwrap_or_default();
+
+                                    match fusion_protobuf::decode(&bytes) {
+                                        Some(data) => {
+                                            if !was_connected {
+                                                log::info!(
+                                                    "Subscriber [{}] receiving data", ep
+                                                );
+                                                was_connected = true;
+                                            }
+                                            if tx.send(data).is_err() {
+                                                return;
+                                            }
+                                        }
+                                        None => {
+                                            log::warn!(
+                                                "Subscriber [{}] failed to decode protobuf ({} bytes)",
+                                                ep,
+                                                bytes.len()
+                                            );
                                         }
                                     }
-                                    None => {
+                                }
+                                Ok(Err(e)) => {
+                                    log::warn!(
+                                        "Subscriber [{}] disconnected: {}; reconnecting...", ep, e
+                                    );
+                                    was_connected = false;
+                                    break;
+                                }
+                                Err(_) => {
+                                    if was_connected {
                                         log::warn!(
-                                            "Subscriber [{}] failed to decode protobuf ({} bytes)",
-                                            ep,
-                                            bytes.len()
+                                            "Subscriber [{}] connection lost; reconnecting...", ep
                                         );
+                                        was_connected = false;
                                     }
+                                    break;
                                 }
                             }
-                            Err(e) => {
-                                log::error!("Subscriber [{}] recv error: {}", ep, e);
-                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                            }
                         }
+
+                        drop(socket);
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     }
                 });
 

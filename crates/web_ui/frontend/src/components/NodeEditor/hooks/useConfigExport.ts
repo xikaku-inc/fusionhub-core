@@ -7,6 +7,7 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     sources: {},
     sinks: {},
   };
+  const explicitConnections = globalSettings?.explicitConnections === true;
 
   const sourceNodes = nodes.filter((n) => {
     const d = n.data as EditorNode;
@@ -95,7 +96,7 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     }
 
     const inputEps = getInputEndpoints(node.id);
-    if (inputEps.length > 0) {
+    if (explicitConnections || inputEps.length > 0) {
       nodeConfig.inputEndpoints = inputEps;
     }
 
@@ -130,7 +131,7 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     }
 
     const inputEps = getInputEndpoints(node.id);
-    if (inputEps.length > 0) {
+    if (explicitConnections || inputEps.length > 0) {
       nodeConfig.inputEndpoints = inputEps;
     }
 

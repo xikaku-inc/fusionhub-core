@@ -317,12 +317,17 @@
   margin: 8px !important;
 }
 
+.react-flow__panel .flex-row > * {
+  height: 34px;
+  box-sizing: border-box;
+}
+
 .react-flow__panel button {
   margin: 0 4px;
 }
 
 /* Animated edge for active data flow */
-.react-flow__edge-path.animated {
+.react-flow__edge.animated .react-flow__edge-path {
   stroke-dasharray: 5;
   animation: edge-flow 1s linear infinite;
 }
