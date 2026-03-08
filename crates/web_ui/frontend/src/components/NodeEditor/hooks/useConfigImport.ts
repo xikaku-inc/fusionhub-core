@@ -50,6 +50,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
   const edges: Edge[] = [];
   const endpointToNodeId = new Map<string, { nodeId: string; outputs: DataType[] }>();
   const accumulatedEndpoints: string[] = [];
+  const explicitConnections = config.settings?.explicitConnections === true;
   const deferredFilterEdges: { endpoint: string; rawEndpoint: string; nodeId: string; nodeType: NodeTypeDefinition }[] = [];
   const externalInputNodes = new Map<string, string>();
   resetEndpointCounter();
@@ -208,8 +209,8 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
               deferredFilterEdges.push({ endpoint: normalized, rawEndpoint: iep, nodeId, nodeType });
             }
           }
-        } else {
-          // No explicit inputEndpoints: connect to all accumulated upstream endpoints
+        } else if (!explicitConnections) {
+          // Legacy: no explicit inputEndpoints — connect to all accumulated upstream endpoints
           for (const aep of accumulatedEndpoints) {
             const source = endpointToNodeId.get(aep);
             if (source) {
@@ -366,8 +367,8 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
             });
           }
         }
-      } else {
-        // Connect to all accumulated endpoints
+      } else if (!explicitConnections) {
+        // Legacy: connect to all accumulated endpoints
         for (const aep of accumulatedEndpoints) {
           const source = endpointToNodeId.get(aep);
           if (source) {

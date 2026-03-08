@@ -67,6 +67,7 @@ pub fn wire_node(
     default_input_endpoints: &[String],
     default_command_endpoints: &[String],
     paused: Arc<AtomicBool>,
+    explicit_connections: bool,
 ) -> NodeConnection {
     let node_name = node.lock().unwrap().name().to_owned();
 
@@ -92,7 +93,7 @@ pub fn wire_node(
         .to_owned();
 
     // Input endpoints — check config root, then settings, then fall back to accumulated defaults
-    let input_endpoints = resolve_input_endpoints(config, default_input_endpoints, &node_name);
+    let input_endpoints = resolve_input_endpoints(config, default_input_endpoints, &node_name, explicit_connections);
 
     // Command input endpoints — check config, fall back to accumulated defaults
     // Mirrors C++ config.value("commandInputEndpoints", commandInputEndpoints)
@@ -258,6 +259,7 @@ fn resolve_input_endpoints(
     config: &Value,
     default_endpoints: &[String],
     node_name: &str,
+    explicit_connections: bool,
 ) -> Vec<String> {
     // Try config root
     if let Some(eps) = config.get("inputEndpoints").and_then(|v| v.as_array()) {
@@ -293,7 +295,15 @@ fn resolve_input_endpoints(
         }
     }
 
-    // Use defaults
+    // Explicit mode: no auto-subscribe when inputEndpoints absent
+    if explicit_connections {
+        log::debug!(
+            "[{}] No inputEndpoints in config, explicit mode — no auto-subscribe",
+            node_name
+        );
+        return Vec::new();
+    }
+
     if !default_endpoints.is_empty() {
         log::debug!(
             "[{}] No inputEndpoints in config, using default endpoints: {:?}",

@@ -51,6 +51,8 @@ export default function NodeEditor() {
   const config = useAppStore((s) => s.config);
   const inputRates = useAppStore((s) => s.inputRates);
   const fusionRates = useAppStore((s) => s.fusionRates);
+  const nodeRates = useAppStore((s) => s.nodeRates);
+  const [explicitConnections, setExplicitConnections] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const importedRef = useRef(false);
@@ -62,11 +64,27 @@ export default function NodeEditor() {
   useEffect(() => {
     if (config && Object.keys(config).length > 0 && !importedRef.current) {
       importedRef.current = true;
+      setExplicitConnections(config.settings?.explicitConnections === true);
       const { nodes: n, edges: e } = configToGraph(config);
       setNodes(n);
       setEdges(e);
     }
   }, [config, setNodes, setEdges]);
+
+  // Re-import graph when explicit connections toggle changes
+  useEffect(() => {
+    if (config && importedRef.current) {
+      const modifiedConfig = {
+        ...config,
+        settings: { ...config.settings, explicitConnections },
+      };
+      const { nodes: n, edges: e } = configToGraph(modifiedConfig);
+      setNodes(n);
+      setEdges(e);
+      setSelectedNode(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explicitConnections]);
 
   // Animate edges and propagate active status through graph
   useEffect(() => {
@@ -75,10 +93,18 @@ export default function NodeEditor() {
       const activeNodes = new Set<string>();
       for (const n of nodesRef.current) {
         const d = n.data as EditorNode;
+        if (d.externalDirection) continue; // handled below
+        // Use per-node rates from nodeStatuses SSE (covers all connection types)
+        const nr = nodeRates[d.configKey];
+        if (nr && (nr.inputRate > 0 || nr.outputRate > 0)) {
+          activeNodes.add(n.id);
+          continue;
+        }
+        // Fallback to legacy hardcoded rate maps
         const rate = getNodeRate(d.nodeType.id, d.configKey, d.nodeType.role, inputRates, fusionRates);
         if (rate > 0) activeNodes.add(n.id);
       }
-      // Propagate through edges
+      // Propagate forward through edges
       let changed = true;
       while (changed) {
         changed = false;
@@ -87,6 +113,17 @@ export default function NodeEditor() {
             activeNodes.add(edge.target);
             changed = true;
           }
+        }
+      }
+      // Reverse-propagate: external input nodes are active if any downstream target is active
+      const extInputIds = new Set(
+        nodesRef.current
+          .filter((n) => (n.data as EditorNode).externalDirection === 'input')
+          .map((n) => n.id),
+      );
+      for (const edge of eds) {
+        if (extInputIds.has(edge.source) && activeNodes.has(edge.target)) {
+          activeNodes.add(edge.source);
         }
       }
       // Update node active flags
@@ -105,7 +142,7 @@ export default function NodeEditor() {
     });
   // Only re-run when rates change, not when nodes/edges change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputRates, fusionRates]);
+  }, [inputRates, fusionRates, nodeRates]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -157,7 +194,8 @@ export default function NodeEditor() {
   }, [config, setNodes, setEdges]);
 
   const handleExport = useCallback(async () => {
-    const newConfig = graphToConfig(nodes, edges, config?.settings || {});
+    const settings = { ...(config?.settings || {}), explicitConnections };
+    const newConfig = graphToConfig(nodes, edges, settings);
     if (config?.LicenseInfo) {
       newConfig.LicenseInfo = config.LicenseInfo;
     }
@@ -168,7 +206,7 @@ export default function NodeEditor() {
     } catch (e) {
       console.error('Failed to save config:', e);
     }
-  }, [nodes, edges, config]);
+  }, [nodes, edges, config, explicitConnections]);
 
   const handleLoadFile = useCallback(async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
@@ -189,7 +227,8 @@ export default function NodeEditor() {
   }, [setNodes, setEdges]);
 
   const handleSaveAs = useCallback(() => {
-    const newConfig = graphToConfig(nodes, edges, config?.settings || {});
+    const settings = { ...(config?.settings || {}), explicitConnections };
+    const newConfig = graphToConfig(nodes, edges, settings);
     if (config?.LicenseInfo) {
       newConfig.LicenseInfo = config.LicenseInfo;
     }
@@ -201,7 +240,7 @@ export default function NodeEditor() {
     a.download = 'config.json';
     a.click();
     URL.revokeObjectURL(url);
-  }, [nodes, edges, config]);
+  }, [nodes, edges, config, explicitConnections]);
 
   const handleDeleteSelected = useCallback(() => {
     setNodes((nds) => nds.filter((n) => !n.selected));
@@ -319,6 +358,14 @@ export default function NodeEditor() {
           />
           <Panel position="top-right">
             <div className="flex-row">
+              <label className="checkbox" style={{ whiteSpace: 'nowrap' }}>
+                <input
+                  type="checkbox"
+                  checked={explicitConnections}
+                  onChange={(e) => setExplicitConnections(e.target.checked)}
+                />
+                Explicit connections
+              </label>
               <button className="secondary" onClick={() => fileInputRef.current?.click()}>
                 Load...
               </button>

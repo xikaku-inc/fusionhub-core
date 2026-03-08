@@ -146,6 +146,7 @@ struct FusionHub {
     m_clockwork: Arc<Mutex<Clockwork>>,
     m_licensed_features: Vec<String>,
     m_paused: Arc<AtomicBool>,
+    m_explicit_connections: bool,
 }
 
 impl FusionHub {
@@ -161,6 +162,15 @@ impl FusionHub {
             ws_cmd_publisher.endpoint()
         );
 
+        let explicit_connections = config
+            .get("settings")
+            .and_then(|s| s.get("explicitConnections"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if explicit_connections {
+            log::info!("Explicit connections mode enabled — nodes require explicit inputEndpoints");
+        }
+
         Self {
             m_data_block: DataBlock::new(),
             m_ws_cmd_publisher: Some(ws_cmd_publisher),
@@ -170,6 +180,7 @@ impl FusionHub {
             m_clockwork: Arc::new(Mutex::new(Clockwork::new())),
             m_licensed_features: licensed_features,
             m_paused: paused,
+            m_explicit_connections: explicit_connections,
         }
     }
 
@@ -274,6 +285,7 @@ impl FusionHub {
                             &no_endpoints,
                             &self.m_data_block.default_cmd_endpoints,
                             self.m_paused.clone(),
+                            false,
                         );
                         Self::set_connection_metadata(&mut conn, key, &name, NodeRole::Source);
                         if !conn.resolved_data_endpoint.is_empty() {
@@ -361,6 +373,7 @@ impl FusionHub {
                             &current_input_eps,
                             &current_cmd_eps,
                             self.m_paused.clone(),
+                            self.m_explicit_connections,
                         );
                         Self::set_connection_metadata(&mut conn, key, &name, NodeRole::Filter);
                         if !conn.resolved_data_endpoint.is_empty() {
@@ -399,6 +412,7 @@ impl FusionHub {
                     &current_input_eps,
                     &current_cmd_eps,
                     self.m_paused.clone(),
+                    false, // DataMonitor always auto-subscribes
                 );
                 conn.config_key = "DataMonitor".to_owned();
                 conn.display_name = "Data Monitor".to_owned();
@@ -429,6 +443,7 @@ impl FusionHub {
                         &current_input_eps,
                         &current_cmd_eps,
                         self.m_paused.clone(),
+                        self.m_explicit_connections,
                     );
                     Self::set_connection_metadata(&mut conn, key, key, NodeRole::Sink);
                     self.m_data_block.connections.push(conn);
