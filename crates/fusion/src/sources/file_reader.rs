@@ -13,7 +13,7 @@ use crate::node::{ConsumerCallback, Node, NodeBase};
 
 pub fn settings_schema() -> Vec<SettingsField> {
     vec![
-        sf("filename", "File Path", "string", json!("")),
+        sf("filename", "File Path", "filepath", json!("")),
         sf("playbackInterval", "Playback Interval (s)", "number", json!(0.001)),
         sf("nSkipInitial", "Skip Initial Samples", "number", json!(0)),
         sf("nStopAfter", "Stop After N Samples", "number", json!(0)),
@@ -59,10 +59,10 @@ impl FileReaderSource {
             .get("nSkipInitial")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as usize;
-        let n_stop_after = config
-            .get("nStopAfter")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(usize::MAX as u64) as usize;
+        let n_stop_after = match config.get("nStopAfter").and_then(|v| v.as_u64()) {
+            Some(0) | None => usize::MAX,
+            Some(n) => n as usize,
+        };
         let show_progress = config
             .get("showProgress")
             .and_then(|v| v.as_bool())

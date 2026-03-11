@@ -21,3 +21,4 @@ include_dir = "0.7"
 mime_guess = "2"
 log_utils = { path = "../log_utils" }
 chrono = { workspace = true }
+rfd = "0.15"

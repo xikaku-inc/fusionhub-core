@@ -1,5 +1,6 @@
 import { type Node } from '@xyflow/react';
 import type { EditorNode, SettingsField } from '../../types/nodes';
+import { apiPost } from '../../api/client';
 
 interface Props {
   node: Node | null;
@@ -46,6 +47,27 @@ function SettingsFieldInput({ field, value, onChange }: { field: SettingsField; 
                 style={{ flex: 1 }} />
             </div>
           ))}
+        </div>
+      );
+    }
+    case 'filepath': {
+      const browse = async () => {
+        try {
+          const res = await apiPost<{ status: string; path?: string }>('/api/file-dialog', {
+            title: field.label,
+            filters: [{ name: 'All Files', extensions: ['*'] }],
+          });
+          if (res.status === 'OK' && res.path) onChange(res.path);
+        } catch { /* dialog cancelled or failed */ }
+      };
+      return (
+        <div className="flex-row gap-4" style={{ alignItems: 'center' }}>
+          <input type="text" value={value ?? field.default ?? ''} onChange={(e) => onChange(e.target.value)} style={{ flex: 1 }} />
+          <button type="button" onClick={browse} style={{
+            padding: '4px 8px', fontSize: 11, cursor: 'pointer',
+            background: 'var(--bg4)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 4,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>Browse</button>
         </div>
       );
     }

@@ -2,10 +2,46 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use fusion_types::{CANData, StreamableData, VehicleSpeed, VehicleState};
+use serde_json::json;
 
 use crate::node::{ConsumerCallback, Node, NodeBase};
 use crate::sources::peak_can_source::PeakCanSource;
 use crate::sources::vector_can_source::VectorCanSource;
+use fusion_registry::{sf, SettingsField};
+
+pub fn settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("canInterface", "CAN Interface", "string", json!("PeakCAN")),
+        sf("baudrate", "Baudrate", "number", json!(500000)),
+        sf("channel", "Channel", "number", json!(0)),
+    ]
+}
+
+pub fn minimal_settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("speedCanId", "Speed CAN ID", "number", json!(0)),
+        sf("speedByteOffset", "Speed Byte Offset", "number", json!(0)),
+        sf("speedScale", "Speed Scale", "number", json!(1.0)),
+    ]
+}
+
+pub fn external_settings_schema() -> Vec<SettingsField> {
+    vec![
+        sf("speedCanId", "Speed CAN ID", "number", json!(0)),
+        sf("speedStartByte", "Speed Start Byte", "number", json!(0)),
+        sf("speedLength", "Speed Length (bytes)", "number", json!(1)),
+        sf("speedScale", "Speed Scale", "number", json!(1.0)),
+        sf("speedOffset", "Speed Offset", "number", json!(0.0)),
+        sf("speedIsBigEndian", "Speed Big Endian", "boolean", json!(false)),
+        sf("steeringCanId", "Steering CAN ID", "number", json!(0)),
+        sf("steeringStartByte", "Steering Start Byte", "number", json!(0)),
+        sf("steeringLength", "Steering Length (bytes)", "number", json!(1)),
+        sf("steeringScale", "Steering Scale", "number", json!(1.0)),
+        sf("steeringOffset", "Steering Offset", "number", json!(0.0)),
+        sf("wheelBase", "Wheel Base (m)", "number", json!(2.9)),
+        sf("trackWidth", "Track Width (m)", "number", json!(1.6)),
+    ]
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CanInterface {
@@ -252,6 +288,7 @@ impl AutomotiveVehicleSource {
 
         let vt = config
             .get("vehicleType")
+            .or_else(|| config.get("type"))
             .and_then(|v| v.as_str())
             .unwrap_or("Default");
         let vehicle_type = match vt {

@@ -267,6 +267,8 @@ impl WebUiServer {
             .route("/api/license/upload", post(api_upload_license))
             .route("/api/license/machines", post(api_list_machines))
             .route("/api/license/deactivate-machine", post(api_deactivate_machine))
+            // File dialog
+            .route("/api/file-dialog", post(api_file_dialog))
             // SSE
             .route("/api/events", get(sse_handler))
             // Static files from React build (catch-all, must be last)
@@ -998,6 +1000,49 @@ async fn api_deactivate_machine(Json(body): Json<Value>) -> Json<Value> {
             }
         }
         Err(e) => Json(json!({ "status": "FAIL", "error": format!("Request failed: {}", e) })),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// File dialog
+// ---------------------------------------------------------------------------
+
+async fn api_file_dialog(Json(body): Json<Value>) -> Json<Value> {
+    let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("Select File");
+    let filters: Vec<(String, Vec<String>)> = body
+        .get("filters")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| {
+                    let name = f.get("name")?.as_str()?.to_owned();
+                    let exts: Vec<String> = f
+                        .get("extensions")?
+                        .as_array()?
+                        .iter()
+                        .filter_map(|e| e.as_str().map(|s| s.to_owned()))
+                        .collect();
+                    Some((name, exts))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let title = title.to_owned();
+    let result = tokio::task::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new().set_title(&title);
+        for (name, exts) in &filters {
+            let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+            dialog = dialog.add_filter(name, &ext_refs);
+        }
+        dialog.pick_file()
+    })
+    .await
+    .unwrap_or(None);
+
+    match result {
+        Some(path) => Json(json!({ "status": "OK", "path": path.to_string_lossy() })),
+        None => Json(json!({ "status": "cancelled" })),
     }
 }
 
