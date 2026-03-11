@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -60,6 +61,7 @@ pub struct NmeaSource {
     m_done: Arc<AtomicBool>,
     m_worker_handle: Option<JoinHandle<()>>,
     m_latest_gps_quality: Arc<Mutex<i32>>,
+    m_serial_writer: Arc<Mutex<Option<Box<dyn serialport::SerialPort>>>>,
 }
 
 impl NmeaSource {
@@ -132,6 +134,7 @@ impl NmeaSource {
             m_done: Arc::new(AtomicBool::new(false)),
             m_worker_handle: None,
             m_latest_gps_quality: Arc::new(Mutex::new(0)),
+            m_serial_writer: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -394,6 +397,8 @@ impl Node for NmeaSource {
         let enabled = self.base.enabled_arc();
         let latest_quality = self.m_latest_gps_quality.clone();
         let node_name = self.base.name().to_string();
+        let serial_writer = self.m_serial_writer.clone();
+        let use_rtcm = self.m_use_rtcm;
 
         self.m_worker_handle = Some(tokio::spawn(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -410,6 +415,17 @@ impl Node for NmeaSource {
                 };
 
                 log::info!("NMEA port is open. Waiting for data...");
+
+                // Share a cloned port handle for RTCM write-back
+                if use_rtcm {
+                    match port.try_clone() {
+                        Ok(clone) => {
+                            *serial_writer.lock().unwrap() = Some(clone);
+                            log::info!("RTCM correction forwarding enabled on serial port");
+                        }
+                        Err(e) => log::warn!("Failed to clone serial port for RTCM: {}", e),
+                    }
+                }
 
                 if initialize_unicore {
                     log::info!("Initializing Unicore UM982 GNSS module...");
@@ -541,6 +557,9 @@ impl Node for NmeaSource {
         log::info!("Stopping NMEA source: {}", self.base.name());
         self.m_done.store(true, Ordering::Relaxed);
 
+        // Drop the cloned serial writer before aborting the worker
+        *self.m_serial_writer.lock().unwrap() = None;
+
         if let Some(handle) = self.m_worker_handle.take() {
             handle.abort();
         }
@@ -555,6 +574,19 @@ impl Node for NmeaSource {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.base.set_enabled(enabled);
+    }
+
+    fn receive_data(&mut self, data: StreamableData) {
+        if let StreamableData::Rtcm(rtcm) = data {
+            if !self.m_use_rtcm || rtcm.chunk.is_empty() {
+                return;
+            }
+            if let Some(ref mut writer) = *self.m_serial_writer.lock().unwrap() {
+                if let Err(e) = writer.write_all(&rtcm.chunk) {
+                    log::warn!("Error writing RTCM to serial port: {}", e);
+                }
+            }
+        }
     }
 
     fn set_on_output(&self, callback: ConsumerCallback) {

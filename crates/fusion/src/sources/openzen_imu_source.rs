@@ -20,6 +20,7 @@ use crate::node::{ConsumerCallback, Node, NodeBase};
 pub fn settings_schema() -> Vec<SettingsField> {
     vec![
         sf("name", "Sensor Name", "string", json!("")),
+        sf("streamFrequency", "Stream Frequency (Hz)", "number", json!(500)),
         sf("onDeviceAutocalibration", "On-Device Autocalibration", "boolean", json!(false)),
         sf("autodetectType", "Autodetect Type", "string", json!("ig1")),
     ]
@@ -68,10 +69,11 @@ impl OpenZenImuSource {
         }
 
         let (stream_frequency, configure_frequency) =
-            if let Some(freq) = config.get("streamFrequency").and_then(|v| v.as_i64()) {
+            if let Some(v) = config.get("streamFrequency") {
+                let freq = v.as_i64().unwrap_or_else(|| v.as_f64().unwrap_or(500.0) as i64);
                 (freq as i32, true)
             } else {
-                (400, false)
+                (500, false)
             };
 
         log::info!(
@@ -298,7 +300,7 @@ impl Node for OpenZenImuSource {
                 let actual_freq = if configure_frequency {
                     stream_frequency
                 } else {
-                    400 // default maximum
+                    500 // default maximum
                 };
 
                 let err = unsafe {

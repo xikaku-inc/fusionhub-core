@@ -11,6 +11,8 @@ use fusion_registry::{sf, SettingsField};
 use fusion_types::{JsonValueExt, OpticalData, StreamableData, Vec3d};
 use serde_json::json;
 
+use log_utils::log_throttled;
+
 use crate::node::{ConsumerCallback, Node, NodeBase};
 
 pub fn settings_schema() -> Vec<SettingsField> {
@@ -677,12 +679,12 @@ impl Node for DTrackOpticalSource {
                     // Detect midnight rollover: if new timestamp is more than 10s
                     // behind previous, we crossed midnight.
                     if timestamp + 10.0 < previous_timestamp {
-                        log::info!(
+                        log_throttled!(30.0, log::info!(
                             "DTrack '{}': updating midnight timestamp: {} previousTimestamp {}",
                             node_name,
                             timestamp,
                             previous_timestamp
-                        );
+                        ));
                         midnight = compute_midnight_utc(time_now);
                     }
 

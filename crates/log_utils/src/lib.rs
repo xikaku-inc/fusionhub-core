@@ -3,6 +3,31 @@ use std::sync::{Mutex, OnceLock};
 
 use tokio::sync::broadcast;
 
+/// Rate-limited logging macro. Logs at most once per `$interval` duration.
+/// Usage: `log_throttled!(30.0, log::info!("msg: {}", val));`
+#[macro_export]
+macro_rules! log_throttled {
+    ($interval_secs:expr, $log_call:expr) => {{
+        use std::sync::Mutex;
+        use std::time::Instant;
+        static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+        let now = Instant::now();
+        let should_log = {
+            let mut last = LAST.lock().unwrap();
+            match *last {
+                Some(t) if now.duration_since(t).as_secs_f64() < $interval_secs => false,
+                _ => {
+                    *last = Some(now);
+                    true
+                }
+            }
+        };
+        if should_log {
+            $log_call;
+        }
+    }};
+}
+
 static LOG_TX: OnceLock<broadcast::Sender<String>> = OnceLock::new();
 static LOG_BUFFER: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
 

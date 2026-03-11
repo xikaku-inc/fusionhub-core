@@ -275,17 +275,23 @@ impl FusionHub {
                 match factory::build_node(key, node_config) {
                     Ok(node) => {
                         log::info!("Created source node: '{}'", name);
-                        // Sources don't subscribe to other sources, so pass empty defaults
-                        let no_endpoints: Vec<String> = Vec::new();
+                        // Sources with declared inputs subscribe to accumulated endpoints
+                        let has_inputs = fusion_registry::metadata_for_key(key)
+                            .map_or(false, |m| !m.inputs.is_empty());
+                        let input_eps = if has_inputs {
+                            self.m_data_block.input_endpoints.clone()
+                        } else {
+                            Vec::new()
+                        };
                         let mut conn = wire_node(
                             node,
                             node_config,
                             NodeRole::Source,
                             self.m_clockwork.clone(),
-                            &no_endpoints,
+                            &input_eps,
                             &self.m_data_block.default_cmd_endpoints,
                             self.m_paused.clone(),
-                            false,
+                            self.m_explicit_connections,
                         );
                         Self::set_connection_metadata(&mut conn, key, &name, NodeRole::Source);
                         if !conn.resolved_data_endpoint.is_empty() {

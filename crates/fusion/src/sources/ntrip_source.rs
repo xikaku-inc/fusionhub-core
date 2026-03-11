@@ -2,6 +2,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
+use tokio::net::TcpStream;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex as TokioMutex;
 use tokio::task::JoinHandle;
 
 use fusion_registry::{sf, SettingsField};
@@ -233,11 +236,9 @@ impl Node for NtripSource {
         let reconnect_interval_ms = self.m_reconnect_interval_ms;
         let max_reconnect_attempts = self.m_max_reconnect_attempts;
         let node_name = self.base.name().to_string();
+        let forward_gnss = self.m_forward_gnss;
 
         self.m_worker_handle = Some(tokio::spawn(async move {
-            use tokio::io::{AsyncReadExt, AsyncWriteExt};
-            use tokio::net::TcpStream;
-
             let mut reconnect_attempt = 0;
             let mut needs_reconnect = false;
 
@@ -276,7 +277,8 @@ impl Node for NtripSource {
 
                 log::info!("TCP connection established to {}:{}", host, port);
 
-                let (mut reader, mut writer) = stream.into_split();
+                let (mut reader, writer) = stream.into_split();
+                let writer = Arc::new(TokioMutex::new(writer));
 
                 // Build and send NTRIP request
                 let credentials = format!("{}:{}", user, password);
@@ -291,10 +293,13 @@ impl Node for NtripSource {
                     mountpoint, user_agent, credentials_b64
                 );
 
-                if let Err(e) = writer.write_all(request.as_bytes()).await {
-                    log::warn!("Error sending NTRIP request: {}", e);
-                    needs_reconnect = true;
-                    continue;
+                {
+                    let mut w = writer.lock().await;
+                    if let Err(e) = w.write_all(request.as_bytes()).await {
+                        log::warn!("Error sending NTRIP request: {}", e);
+                        needs_reconnect = true;
+                        continue;
+                    }
                 }
 
                 // Read server response
@@ -324,7 +329,36 @@ impl Node for NtripSource {
                     let gnss = latest_gnss.lock().unwrap();
                     generate_gga_frame(&gnss)
                 };
-                let _ = writer.write_all(gga.as_bytes()).await;
+                {
+                    let mut w = writer.lock().await;
+                    let _ = w.write_all(gga.as_bytes()).await;
+                }
+
+                // Spawn periodic GGA sender when forwardGnss is enabled
+                let gga_done = done.clone();
+                let gga_writer = writer.clone();
+                let gga_gnss = latest_gnss.clone();
+                let gga_handle = if forward_gnss {
+                    log::info!("GGA forwarding enabled, sending position updates every 1s");
+                    Some(tokio::spawn(async move {
+                        let mut interval = tokio::time::interval(Duration::from_secs(1));
+                        interval.tick().await; // Skip immediate first tick
+                        while !gga_done.load(Ordering::Relaxed) {
+                            interval.tick().await;
+                            let gga = {
+                                let gnss = gga_gnss.lock().unwrap();
+                                generate_gga_frame(&gnss)
+                            };
+                            let mut w = gga_writer.lock().await;
+                            if let Err(e) = w.write_all(gga.as_bytes()).await {
+                                log::warn!("Error sending GGA frame: {}", e);
+                                break;
+                            }
+                        }
+                    }))
+                } else {
+                    None
+                };
 
                 // Read RTCM data
                 let mut data_buf = [0u8; 4096];
@@ -361,6 +395,11 @@ impl Node for NtripSource {
                         }
                     }
                 }
+
+                // Stop GGA sender on disconnect
+                if let Some(h) = gga_handle {
+                    h.abort();
+                }
             }
         }));
 
@@ -385,6 +424,12 @@ impl Node for NtripSource {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.base.set_enabled(enabled);
+    }
+
+    fn receive_data(&mut self, data: StreamableData) {
+        if let StreamableData::Gnss(gnss) = data {
+            *self.m_latest_gnss_data.lock().unwrap() = gnss;
+        }
     }
 
     fn set_on_output(&self, callback: ConsumerCallback) {

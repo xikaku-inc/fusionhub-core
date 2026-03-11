@@ -6,7 +6,6 @@ pub mod act2535_data_format;
 pub mod imu_source;
 pub mod optical_source;
 pub mod gnss_source;
-pub mod rtcm_source;
 pub mod can_data_source;
 pub mod mqtt_source;
 pub mod elm327_source;
