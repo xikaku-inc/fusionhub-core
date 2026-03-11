@@ -195,35 +195,49 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
             const normalized = normalizeEndpoint(iep);
             const source = endpointToNodeId.get(normalized);
             if (source) {
-              for (const outType of source.outputs) {
-                if (nodeType.inputs.includes(outType)) {
+              if (source.outputs.includes('Dynamic' as DataType) && nodeType.inputs.length > 0) {
+                // Dynamic output connects to all target inputs
+                for (const inType of nodeType.inputs) {
                   edges.push({
-                    id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                    id: `e-${source.nodeId}-${nodeId}-dyn-${inType}`,
                     source: source.nodeId,
                     target: nodeId,
-                    sourceHandle: `out-${outType}`,
-                    targetHandle: `in-${outType}`,
+                    sourceHandle: 'out-Dynamic',
+                    targetHandle: `in-${inType}`,
                     animated: false,
                   });
                 }
-              }
-              // Fallback: external input nodes have empty outputs, create untyped edge
-              if (source.outputs.length === 0) {
-                edges.push({
-                  id: `e-${source.nodeId}-${nodeId}-ext`,
-                  source: source.nodeId,
-                  target: nodeId,
-                  sourceHandle: 'out-ext',
-                  targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
-                });
-              } else if (!source.outputs.some((o) => nodeType.inputs.includes(o))) {
-                edges.push({
-                  id: `e-${source.nodeId}-${nodeId}`,
-                  source: source.nodeId,
-                  target: nodeId,
-                  sourceHandle: source.outputs.length > 0 ? `out-${source.outputs[0]}` : undefined,
-                  targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : undefined,
-                });
+              } else {
+                for (const outType of source.outputs) {
+                  if (nodeType.inputs.includes(outType)) {
+                    edges.push({
+                      id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                      source: source.nodeId,
+                      target: nodeId,
+                      sourceHandle: `out-${outType}`,
+                      targetHandle: `in-${outType}`,
+                      animated: false,
+                    });
+                  }
+                }
+                // Fallback: external input nodes have empty outputs, create untyped edge
+                if (source.outputs.length === 0) {
+                  edges.push({
+                    id: `e-${source.nodeId}-${nodeId}-ext`,
+                    source: source.nodeId,
+                    target: nodeId,
+                    sourceHandle: 'out-ext',
+                    targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
+                  });
+                } else if (!source.outputs.some((o) => nodeType.inputs.includes(o))) {
+                  edges.push({
+                    id: `e-${source.nodeId}-${nodeId}`,
+                    source: source.nodeId,
+                    target: nodeId,
+                    sourceHandle: source.outputs.length > 0 ? `out-${source.outputs[0]}` : undefined,
+                    targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : undefined,
+                  });
+                }
               }
             } else if (isTcpEndpoint(iep)) {
               // Unresolved TCP endpoint — create external input node
@@ -284,7 +298,17 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
     const source = endpointToNodeId.get(deferred.endpoint);
     if (source) {
       const targetNodeType = deferred.nodeType;
-      if (source.outputs.length === 0) {
+      if (source.outputs.includes('Dynamic' as DataType) && targetNodeType.inputs.length > 0) {
+        for (const inType of targetNodeType.inputs) {
+          edges.push({
+            id: `e-${source.nodeId}-${deferred.nodeId}-dyn-${inType}`,
+            source: source.nodeId,
+            target: deferred.nodeId,
+            sourceHandle: 'out-Dynamic',
+            targetHandle: `in-${inType}`,
+          });
+        }
+      } else if (source.outputs.length === 0) {
         edges.push({
           id: `e-${source.nodeId}-${deferred.nodeId}-ext`,
           source: source.nodeId,
@@ -364,7 +388,17 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           const source = endpointToNodeId.get(normalized);
           if (source) {
             const hasSpecificInputs = nodeType.inputs.length > 0;
-            if (source.outputs.length === 0) {
+            if (source.outputs.includes('Dynamic' as DataType) && hasSpecificInputs) {
+              for (const inType of nodeType.inputs) {
+                edges.push({
+                  id: `e-${source.nodeId}-${nodeId}-dyn-${inType}`,
+                  source: source.nodeId,
+                  target: nodeId,
+                  sourceHandle: 'out-Dynamic',
+                  targetHandle: `in-${inType}`,
+                });
+              }
+            } else if (source.outputs.length === 0) {
               edges.push({
                 id: `e-${source.nodeId}-${nodeId}-ext`,
                 source: source.nodeId,
