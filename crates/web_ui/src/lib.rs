@@ -21,6 +21,8 @@ use crypto::LicenseInfo;
 use fusion_types::{ApiRequest, JsonValueExt};
 use websocket_server::CommandChannel;
 
+mod oscilloscope;
+
 static DIST_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/ui/dist");
 
 const VERSION_NUMBER: &str = "1.0.0";
@@ -42,6 +44,8 @@ struct ServerState {
     license_key: String,
     license_server_url: String,
     paused: Arc<AtomicBool>,
+    oscilloscope_task: Option<tokio::task::JoinHandle<()>>,
+    discovery_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 type SharedState = Arc<Mutex<ServerState>>;
@@ -118,6 +122,8 @@ impl WebUiServer {
             license_key,
             license_server_url,
             paused,
+            oscilloscope_task: None,
+            discovery_task: None,
         }));
 
         // Subscribe to CommandChannel and forward node responses as SSE events
@@ -267,6 +273,11 @@ impl WebUiServer {
             .route("/api/license/upload", post(api_upload_license))
             .route("/api/license/machines", post(api_list_machines))
             .route("/api/license/deactivate-machine", post(api_deactivate_machine))
+            // Oscilloscope
+            .route("/api/oscilloscope/fields", post(api_oscilloscope_fields))
+            .route("/api/oscilloscope/detect", post(api_oscilloscope_detect))
+            .route("/api/oscilloscope/start", post(api_oscilloscope_start))
+            .route("/api/oscilloscope/stop", post(api_oscilloscope_stop))
             // File dialog
             .route("/api/file-dialog", post(api_file_dialog))
             // SSE
@@ -1001,6 +1012,105 @@ async fn api_deactivate_machine(Json(body): Json<Value>) -> Json<Value> {
         }
         Err(e) => Json(json!({ "status": "FAIL", "error": format!("Request failed: {}", e) })),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Oscilloscope API handlers
+// ---------------------------------------------------------------------------
+
+async fn api_oscilloscope_fields(Json(body): Json<Value>) -> Json<Value> {
+    let data_type = body
+        .get("dataType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let fields = oscilloscope::enumerate_numeric_fields(data_type);
+    Json(json!({ "fields": fields }))
+}
+
+async fn api_oscilloscope_detect(
+    State(state): State<SharedState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let endpoint = match body.get("endpoint").and_then(|v| v.as_str()) {
+        Some(e) => e,
+        None => return Json(json!({ "status": "FAIL", "error": "Missing 'endpoint'" })),
+    };
+    let types = oscilloscope::detect_types(endpoint).await;
+    let entries: Vec<Value> = types
+        .iter()
+        .map(|t| {
+            json!({
+                "dataType": t,
+                "fields": oscilloscope::enumerate_numeric_fields(t),
+            })
+        })
+        .collect();
+
+    // Push initial results to store via SSE
+    let mut s = state.lock().await;
+    let sse_tx = s.sse_tx.clone();
+    let event = json!({"type": "oscilloscopeTypes", "data": {"types": entries}});
+    let _ = sse_tx.send(event.to_string());
+
+    // Start background discovery seeded with initial types
+    if let Some(h) = s.discovery_task.take() {
+        h.abort();
+    }
+    let ep = endpoint.to_owned();
+    s.discovery_task = Some(tokio::spawn(
+        oscilloscope::run_discovery(ep, types, sse_tx),
+    ));
+
+    Json(json!({ "types": entries }))
+}
+
+async fn api_oscilloscope_start(
+    State(state): State<SharedState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let endpoint = match body.get("endpoint").and_then(|v| v.as_str()) {
+        Some(e) => e.to_owned(),
+        None => return Json(json!({ "status": "FAIL", "error": "Missing 'endpoint'" })),
+    };
+    let data_type = body
+        .get("dataType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_owned();
+    let field = match body.get("field").and_then(|v| v.as_str()) {
+        Some(f) => f.to_owned(),
+        None => return Json(json!({ "status": "FAIL", "error": "Missing 'field'" })),
+    };
+    let max_rate = body
+        .get("maxRate")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(60) as u32;
+
+    let mut s = state.lock().await;
+
+    // Stop any existing oscilloscope task
+    if let Some(handle) = s.oscilloscope_task.take() {
+        handle.abort();
+    }
+
+    let sse_tx = s.sse_tx.clone();
+    let handle = tokio::spawn(oscilloscope::run_oscilloscope(
+        endpoint, data_type, field, max_rate, sse_tx,
+    ));
+    s.oscilloscope_task = Some(handle);
+
+    Json(json!({ "status": "OK" }))
+}
+
+async fn api_oscilloscope_stop(State(state): State<SharedState>) -> Json<Value> {
+    let mut s = state.lock().await;
+    if let Some(handle) = s.oscilloscope_task.take() {
+        handle.abort();
+    }
+    if let Some(handle) = s.discovery_task.take() {
+        handle.abort();
+    }
+    Json(json!({ "status": "OK" }))
 }
 
 // ---------------------------------------------------------------------------

@@ -370,7 +370,7 @@ pub struct GnssData {
     pub internal_frame_count: i32,
     #[serde(with = "serde_quatd")]
     pub orientation: Quatd,
-    #[serde(rename = "diffAge")]
+    #[serde(rename = "diffAge", default)]
     pub diff_age: f64,
 }
 

@@ -16,6 +16,9 @@ crypto = { path = "../crypto" }
 fusion_types = { path = "../fusion_types" }
 fusion_registry = { path = "../fusion_registry" }
 websocket_server = { path = "../websocket_server" }
+networking = { path = "../networking" }
+fusion_protobuf = { path = "../fusion_protobuf" }
+zeromq = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
 include_dir = "0.7"
 mime_guess = "2"

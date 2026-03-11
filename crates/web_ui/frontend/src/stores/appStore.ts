@@ -65,6 +65,13 @@ interface AppState {
   aiMonitorStatus: any;
   setAiMonitorStatus: (s: any) => void;
 
+  // Oscilloscope
+  oscilloscopeData: { t: number[]; v: number[] };
+  pushOscilloscopePoint: (t: number, v: number) => void;
+  clearOscilloscopeData: () => void;
+  oscilloscopeTypes: { dataType: string; fields: string[] }[];
+  setOscilloscopeTypes: (types: { dataType: string; fields: string[] }[]) => void;
+
   // Logs
   logEntries: LogEntry[];
   addLogEntries: (entries: LogEntry[]) => void;
@@ -240,6 +247,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   aiMonitorStatus: null,
   setAiMonitorStatus: (s) => set({ aiMonitorStatus: s }),
+
+  // Oscilloscope
+  oscilloscopeData: { t: [], v: [] },
+  pushOscilloscopePoint: (t, v) => set((s) => {
+    const MAX_POINTS = 600;
+    const td = s.oscilloscopeData;
+    const newT = td.t.length >= MAX_POINTS ? [...td.t.slice(1), t] : [...td.t, t];
+    const newV = td.v.length >= MAX_POINTS ? [...td.v.slice(1), v] : [...td.v, v];
+    return { oscilloscopeData: { t: newT, v: newV } };
+  }),
+  clearOscilloscopeData: () => set({ oscilloscopeData: { t: [], v: [] } }),
+  oscilloscopeTypes: [],
+  setOscilloscopeTypes: (types) => set({ oscilloscopeTypes: types }),
 
   // Logs
   logEntries: [],

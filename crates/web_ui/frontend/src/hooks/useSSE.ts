@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
+import { pushPoint } from '../components/NodeEditor/oscilloscopeBuffer';
 import type { InputStatus, FusionStatus } from '../api/types';
 
 export function useSSE() {
@@ -125,6 +126,14 @@ export function useSSE() {
             state.addLogEntries(data);
           }
           break;
+
+        case 'oscilloscope':
+          pushPoint(data.t, data.v);
+          break;
+
+        case 'oscilloscopeTypes':
+          state.setOscilloscopeTypes(data.types);
+          break;
       }
     }
 
@@ -132,7 +141,8 @@ export function useSSE() {
       'config', 'status', 'inputStatus',
       'getIntercalibrationStatus', 'intercalibrationResult',
       'licenseStatus', 'fusedPose', 'opticalData', 'fusedVehiclePose',
-      'nodeStatuses', 'mcpStatus', 'aiMonitorStatus', 'log',
+      'nodeStatuses', 'mcpStatus', 'aiMonitorStatus', 'log', 'oscilloscope',
+      'oscilloscopeTypes',
     ];
 
     for (const type of eventTypes) {

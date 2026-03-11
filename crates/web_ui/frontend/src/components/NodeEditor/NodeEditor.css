@@ -5,6 +5,13 @@
   gap: 0;
 }
 
+.node-editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .node-editor-canvas {
   flex: 1;
   position: relative;
@@ -336,4 +343,98 @@
   to {
     stroke-dashoffset: -10;
   }
+}
+
+/* Oscilloscope Panel */
+.oscilloscope-resize-handle {
+  height: 5px;
+  cursor: row-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.oscilloscope-resize-handle:hover {
+  background: var(--accent);
+}
+
+.oscilloscope-panel {
+  height: 220px;
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.oscilloscope-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+  flex-shrink: 0;
+}
+
+.oscilloscope-type {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 2px 6px;
+  background: rgba(100, 180, 255, 0.1);
+  border-radius: 3px;
+}
+
+.oscilloscope-type-select {
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.oscilloscope-field-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  min-width: 160px;
+}
+
+.oscilloscope-warn {
+  font-size: 11px;
+  color: var(--yellow, #ffa726);
+}
+
+.oscilloscope-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.oscilloscope-close:hover {
+  color: var(--text);
+}
+
+.oscilloscope-chart {
+  flex: 1;
+  min-height: 0;
+  padding: 2px;
+}
+
+.oscilloscope-chart .u-wrap {
+  background: var(--bg) !important;
+}
+
+.oscilloscope-chart canvas {
+  background: var(--bg) !important;
 }

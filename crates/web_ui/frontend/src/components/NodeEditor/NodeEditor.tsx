@@ -28,6 +28,7 @@ import SinkNode from './nodes/SinkNode';
 import ExternalNode from './nodes/ExternalNode';
 import NodePalette from './NodePalette';
 import PropertiesPanel from './PropertiesPanel';
+import OscilloscopePanel from './OscilloscopePanel';
 import type { NodeTypeDefinition, EditorNode } from '../../types/nodes';
 import { apiPost } from '../../api/client';
 
@@ -48,6 +49,9 @@ export default function NodeEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [oscilloscopeEdge, setOscilloscopeEdge] = useState<Edge | null>(null);
+  const [scopeHeight, setScopeHeight] = useState(220);
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const config = useAppStore((s) => s.config);
   const inputRates = useAppStore((s) => s.inputRates);
   const fusionRates = useAppStore((s) => s.fusionRates);
@@ -162,6 +166,10 @@ export default function NodeEditor() {
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+  }, []);
+
+  const onEdgeClick = useCallback((_: any, edge: Edge) => {
+    setOscilloscopeEdge(edge);
   }, []);
 
   const onUpdateNode = useCallback(
@@ -326,65 +334,100 @@ export default function NodeEditor() {
     [nodes, edges],
   );
 
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startY: e.clientY, startH: scopeHeight };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = dragRef.current.startY - ev.clientY;
+      setScopeHeight(Math.max(100, Math.min(600, dragRef.current.startH + delta)));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [scopeHeight]);
+
   return (
     <div className="node-editor-container">
       <NodePalette />
-      <div className="node-editor-canvas" ref={reactFlowWrapper}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          onPaneClick={onPaneClick}
-          isValidConnection={connectionValidator}
-          nodeTypes={nodeTypes}
-          onInit={setReactFlowInstance}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          deleteKeyCode="Delete"
-          fitView
-          colorMode="dark"
+      <div className="node-editor-main">
+        <div
+          className="node-editor-canvas"
+          ref={reactFlowWrapper}
+          style={oscilloscopeEdge ? { height: `calc(100% - ${scopeHeight}px)` } : undefined}
         >
-          <Controls />
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <MiniMap
-            nodeStrokeWidth={3}
-            nodeColor={(n) => {
-              const d = n.data as EditorNode;
-              return d.nodeType?.color || '#666';
-            }}
-          />
-          <Panel position="top-right">
-            <div className="flex-row">
-              <label className="checkbox" style={{ whiteSpace: 'nowrap' }}>
-                <input
-                  type="checkbox"
-                  checked={explicitConnections}
-                  onChange={(e) => setExplicitConnections(e.target.checked)}
-                />
-                Explicit connections
-              </label>
-              <button className="secondary" onClick={() => fileInputRef.current?.click()}>
-                Load...
-              </button>
-              <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleLoadFile} />
-              <button className="secondary" onClick={handleImport}>
-                Reload
-              </button>
-              <button onClick={handleExport}>
-                Apply &amp; Save
-              </button>
-              <button className="secondary" onClick={handleSaveAs}>
-                Save As...
-              </button>
-              <button className="danger" onClick={handleDeleteSelected}>
-                Delete Selected
-              </button>
-            </div>
-          </Panel>
-        </ReactFlow>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
+            onEdgeClick={onEdgeClick}
+            isValidConnection={connectionValidator}
+            nodeTypes={nodeTypes}
+            onInit={setReactFlowInstance}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            deleteKeyCode="Delete"
+            fitView
+            colorMode="dark"
+          >
+            <Controls />
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+            <MiniMap
+              nodeStrokeWidth={3}
+              nodeColor={(n) => {
+                const d = n.data as EditorNode;
+                return d.nodeType?.color || '#666';
+              }}
+            />
+            <Panel position="top-right">
+              <div className="flex-row">
+                <label className="checkbox" style={{ whiteSpace: 'nowrap' }}>
+                  <input
+                    type="checkbox"
+                    checked={explicitConnections}
+                    onChange={(e) => setExplicitConnections(e.target.checked)}
+                  />
+                  Explicit connections
+                </label>
+                <button className="secondary" onClick={() => fileInputRef.current?.click()}>
+                  Load...
+                </button>
+                <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleLoadFile} />
+                <button className="secondary" onClick={handleImport}>
+                  Reload
+                </button>
+                <button onClick={handleExport}>
+                  Apply &amp; Save
+                </button>
+                <button className="secondary" onClick={handleSaveAs}>
+                  Save As...
+                </button>
+                <button className="danger" onClick={handleDeleteSelected}>
+                  Delete Selected
+                </button>
+              </div>
+            </Panel>
+          </ReactFlow>
+        </div>
+        {oscilloscopeEdge && (
+          <>
+            <div className="oscilloscope-resize-handle" onMouseDown={onResizeStart} />
+            <OscilloscopePanel
+              edge={oscilloscopeEdge}
+              nodes={nodes}
+              onClose={() => setOscilloscopeEdge(null)}
+              height={scopeHeight}
+            />
+          </>
+        )}
       </div>
       <PropertiesPanel node={selectedNode} onUpdateNode={onUpdateNode} />
     </div>
