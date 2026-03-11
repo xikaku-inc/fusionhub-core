@@ -67,6 +67,10 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     if (d.subtype) {
       nodeConfig.type = d.subtype;
     }
+    const srcInputEps = getInputEndpoints(node.id);
+    if (srcInputEps.length > 0) {
+      nodeConfig.inputEndpoints = srcInputEps;
+    }
     if (d.settings && Object.keys(d.settings).length > 0) {
       nodeConfig.settings = d.settings;
     }
@@ -141,6 +145,13 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
 
     config.sinks[key] = Object.keys(nodeConfig).length > 0 ? nodeConfig : {};
   }
+
+  // Persist node positions in _layout
+  const nodePositions: Record<string, { x: number; y: number }> = {};
+  for (const node of nodes) {
+    nodePositions[node.id] = node.position;
+  }
+  config._layout = { nodePositions };
 
   return config;
 }

@@ -109,6 +109,37 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
       }
     }
 
+    // Create edges for sources with inputEndpoints (e.g. NMEA receiving RTCM)
+    for (const [key, value] of Object.entries(config.sources as Record<string, any>)) {
+      if (key.startsWith('_') || key === 'endpoints') continue;
+      const configs: any[] = Array.isArray(value) ? value : [value];
+      for (let i = 0; i < configs.length; i++) {
+        const cfg = configs[i];
+        const inputEndpoints: string[] = cfg.inputEndpoints || [];
+        if (inputEndpoints.length === 0) continue;
+        const nodeId = configs.length > 1 ? `source-${key}_${i}` : `source-${key}`;
+        const nodeType = findNodeType(key);
+        if (!nodeType) continue;
+        for (const iep of inputEndpoints) {
+          const normalized = normalizeEndpoint(iep);
+          const source = endpointToNodeId.get(normalized);
+          if (source) {
+            for (const outType of source.outputs) {
+              if (nodeType.inputs.includes(outType)) {
+                edges.push({
+                  id: `e-${source.nodeId}-${nodeId}-${outType}`,
+                  source: source.nodeId,
+                  target: nodeId,
+                  sourceHandle: `out-${outType}`,
+                  targetHandle: `in-${outType}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Handle explicit endpoints array — create external input nodes for TCP entries
     if (config.sources.endpoints) {
       const eps = Array.isArray(config.sources.endpoints) ? config.sources.endpoints : [config.sources.endpoints];
@@ -438,6 +469,13 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
       targetHandle: 'in-ext',
     });
     extOutputCol++;
+  }
+
+  // Restore node positions from layout
+  const savedPositions: Record<string, { x: number; y: number }> = config._layout?.nodePositions || {};
+  for (let i = 0; i < nodes.length; i++) {
+    const pos = savedPositions[nodes[i].id];
+    if (pos) nodes[i] = { ...nodes[i], position: pos };
   }
 
   return { nodes, edges };
