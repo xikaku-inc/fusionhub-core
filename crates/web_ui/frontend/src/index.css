@@ -614,11 +614,17 @@ h3:first-child { margin-top: 0; }
 }
 .tile-detail-key {
     color: var(--text2);
+    flex-shrink: 0;
+    margin-right: 8px;
 }
 .tile-detail-value {
     color: var(--text);
     font-family: 'Cascadia Code', 'Fira Code', monospace;
     font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 /* Activity monitor */

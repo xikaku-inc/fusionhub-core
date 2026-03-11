@@ -22,13 +22,11 @@ fn main() {
         return;
     }
 
-    let index_html = Path::new("src/ui/dist/index.html");
-
     println!("cargo:rerun-if-changed=frontend/src");
+    println!("cargo:rerun-if-changed=frontend/index.html");
     println!("cargo:rerun-if-changed=frontend/package.json");
     println!("cargo:rerun-if-changed=frontend/vite.config.ts");
     println!("cargo:rerun-if-changed=frontend/tsconfig.json");
-    println!("cargo:rerun-if-changed={}", index_html.display());
 
     if !frontend.join("node_modules").exists() {
         let mut cmd = npm();
@@ -36,9 +34,7 @@ fn main() {
         run(cmd, "npm install (web_ui frontend)");
     }
 
-    if !index_html.exists() {
-        let mut cmd = npm();
-        cmd.args(["run", "build"]).current_dir(frontend);
-        run(cmd, "npm run build (web_ui frontend)");
-    }
+    let mut cmd = npm();
+    cmd.args(["run", "build"]).current_dir(frontend);
+    run(cmd, "npm run build (web_ui frontend)");
 }

@@ -113,7 +113,7 @@ function StatusTile({ configKey, entry, rates }: {
           {details.map(([k, v]) => (
             <div key={k} className="tile-detail-row">
               <span className="tile-detail-key">{k}</span>
-              <span className="tile-detail-value">{formatValue(v)}</span>
+              <span className="tile-detail-value" title={String(formatValue(v))}>{formatValue(v)}</span>
             </div>
           ))}
         </div>
