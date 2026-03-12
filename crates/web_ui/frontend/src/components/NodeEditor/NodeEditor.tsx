@@ -29,8 +29,10 @@ import ExternalNode from './nodes/ExternalNode';
 import NodePalette from './NodePalette';
 import PropertiesPanel from './PropertiesPanel';
 import OscilloscopePanel from './OscilloscopePanel';
+import ConsolePanel from './ConsolePanel';
 import type { NodeTypeDefinition, EditorNode } from '../../types/nodes';
 import { apiPost } from '../../api/client';
+import { clearBuffer } from './oscilloscopeBuffer';
 
 const nodeTypes = {
   sourceNode: SourceNode,
@@ -50,7 +52,9 @@ export default function NodeEditor() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [oscilloscopeEdge, setOscilloscopeEdge] = useState<Edge | null>(null);
+  const [consoleNodeKey, setConsoleNodeKey] = useState('');
   const [scopeHeight, setScopeHeight] = useState(220);
+  const [activeTab, setActiveTab] = useState<'scope' | 'console'>('scope');
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const config = useAppStore((s) => s.config);
   const inputRates = useAppStore((s) => s.inputRates);
@@ -160,6 +164,11 @@ export default function NodeEditor() {
   const onNodeClick = useCallback(
     (_: any, node: Node) => {
       setSelectedNode(node);
+      const key = (node.data as EditorNode)?.configKey || '';
+      if (key) {
+        setConsoleNodeKey(key);
+        setActiveTab('console');
+      }
     },
     [],
   );
@@ -170,6 +179,7 @@ export default function NodeEditor() {
 
   const onEdgeClick = useCallback((_: any, edge: Edge) => {
     setOscilloscopeEdge(edge);
+    setActiveTab('scope');
   }, []);
 
   const onUpdateNode = useCallback(
@@ -351,6 +361,20 @@ export default function NodeEditor() {
     document.addEventListener('mouseup', onUp);
   }, [scopeHeight]);
 
+  const bottomPanelOpen = !!(oscilloscopeEdge || consoleNodeKey);
+
+  const handleBottomClose = useCallback(() => {
+    if (activeTab === 'scope') {
+      apiPost('/api/oscilloscope/stop');
+      clearBuffer();
+      setOscilloscopeEdge(null);
+      if (consoleNodeKey) setActiveTab('console');
+    } else {
+      setConsoleNodeKey('');
+      if (oscilloscopeEdge) setActiveTab('scope');
+    }
+  }, [activeTab, consoleNodeKey, oscilloscopeEdge]);
+
   return (
     <div className="node-editor-container">
       <NodePalette />
@@ -358,7 +382,6 @@ export default function NodeEditor() {
         <div
           className="node-editor-canvas"
           ref={reactFlowWrapper}
-          style={oscilloscopeEdge ? { height: `calc(100% - ${scopeHeight}px)` } : undefined}
         >
           <ReactFlow
             nodes={nodes}
@@ -417,15 +440,43 @@ export default function NodeEditor() {
             </Panel>
           </ReactFlow>
         </div>
-        {oscilloscopeEdge && (
+        {bottomPanelOpen && (
           <>
             <div className="oscilloscope-resize-handle" onMouseDown={onResizeStart} />
-            <OscilloscopePanel
-              edge={oscilloscopeEdge}
-              nodes={nodes}
-              onClose={() => setOscilloscopeEdge(null)}
-              height={scopeHeight}
-            />
+            <div className="bottom-panel" style={{ height: scopeHeight }}>
+              <div className="bottom-panel-tabs">
+                <button
+                  className={`bottom-panel-tab${activeTab === 'scope' ? ' active' : ''}`}
+                  onClick={() => setActiveTab('scope')}
+                >
+                  Scope
+                </button>
+                <button
+                  className={`bottom-panel-tab${activeTab === 'console' ? ' active' : ''}`}
+                  onClick={() => setActiveTab('console')}
+                >
+                  Console
+                </button>
+                <button className="oscilloscope-close" onClick={handleBottomClose}>
+                  &times;
+                </button>
+              </div>
+              {activeTab === 'scope' && oscilloscopeEdge && (
+                <OscilloscopePanel
+                  edge={oscilloscopeEdge}
+                  nodes={nodes}
+                />
+              )}
+              {activeTab === 'scope' && !oscilloscopeEdge && (
+                <div className="bottom-panel-empty">Click an edge to view signal data</div>
+              )}
+              {activeTab === 'console' && consoleNodeKey && (
+                <ConsolePanel nodeKey={consoleNodeKey} />
+              )}
+              {activeTab === 'console' && !consoleNodeKey && (
+                <div className="bottom-panel-empty">Click a node to view its console output</div>
+              )}
+            </div>
           </>
         )}
       </div>

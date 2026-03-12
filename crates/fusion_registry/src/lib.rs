@@ -1,3 +1,6 @@
+use std::collections::{HashMap, VecDeque};
+use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::{bail, Result};
@@ -235,4 +238,105 @@ pub fn defaults_from_schema(schema: &[SettingsField]) -> Value {
         }
     }
     Value::Object(map)
+}
+
+// ---------------------------------------------------------------------------
+// Per-node log buffer
+// ---------------------------------------------------------------------------
+
+const NODE_LOG_MAX_ENTRIES: usize = 500;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NodeLogEntry {
+    pub ts: String,
+    pub level: String,
+    pub message: String,
+}
+
+pub struct NodeLogBuffer {
+    entries: VecDeque<NodeLogEntry>,
+    drain_cursor: usize,
+}
+
+impl NodeLogBuffer {
+    fn new() -> Self {
+        Self { entries: VecDeque::new(), drain_cursor: 0 }
+    }
+
+    pub fn push(&mut self, level: &str, message: &str) {
+        if self.entries.len() >= NODE_LOG_MAX_ENTRIES {
+            self.entries.pop_front();
+            if self.drain_cursor > 0 {
+                self.drain_cursor -= 1;
+            }
+        }
+        self.entries.push_back(NodeLogEntry {
+            ts: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+            level: level.to_owned(),
+            message: message.to_owned(),
+        });
+    }
+
+    /// Return entries added since the last drain call.
+    pub fn drain_new(&mut self) -> Vec<NodeLogEntry> {
+        let new_entries: Vec<_> = self.entries.iter().skip(self.drain_cursor).cloned().collect();
+        self.drain_cursor = self.entries.len();
+        new_entries
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.drain_cursor = 0;
+    }
+}
+
+static NODE_LOG_REGISTRY: OnceLock<Mutex<HashMap<String, Arc<Mutex<NodeLogBuffer>>>>> =
+    OnceLock::new();
+
+fn node_log_registry() -> &'static Mutex<HashMap<String, Arc<Mutex<NodeLogBuffer>>>> {
+    NODE_LOG_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+static NODE_LOG_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Create a log buffer for a node. Returns the shared buffer reference.
+pub fn init_node_logger(config_key: &str) -> Arc<Mutex<NodeLogBuffer>> {
+    let mut reg = node_log_registry().lock().unwrap();
+    let buf = reg
+        .entry(config_key.to_owned())
+        .or_insert_with(|| Arc::new(Mutex::new(NodeLogBuffer::new())));
+    buf.clone()
+}
+
+/// Push a log entry to a node's buffer.
+pub fn node_log(config_key: &str, level: &str, msg: impl fmt::Display) {
+    let reg = node_log_registry().lock().unwrap();
+    if let Some(buf) = reg.get(config_key) {
+        buf.lock().unwrap().push(level, &msg.to_string());
+    }
+    let _ = NODE_LOG_SEQ.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Drain new entries from a node's log buffer since the last drain.
+pub fn drain_node_logs(config_key: &str) -> Vec<NodeLogEntry> {
+    let reg = node_log_registry().lock().unwrap();
+    if let Some(buf) = reg.get(config_key) {
+        buf.lock().unwrap().drain_new()
+    } else {
+        Vec::new()
+    }
+}
+
+/// Clear all node log buffers (call on engine restart).
+pub fn clear_all_node_logs() {
+    let reg = node_log_registry().lock().unwrap();
+    for buf in reg.values() {
+        buf.lock().unwrap().clear();
+    }
+}
+
+/// Return all known node log keys.
+pub fn node_log_keys() -> Vec<String> {
+    let reg = node_log_registry().lock().unwrap();
+    reg.keys().cloned().collect()
 }

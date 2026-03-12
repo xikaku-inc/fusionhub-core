@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiGet, apiPost, apiPostFormData } from '../api/client';
-import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload, McpStatus, LogEntry } from '../api/types';
+import type { FusionStatus, InputStatus, IntercalibrationStatus, FusedPose, OpticalData, FusedVehiclePose, LicenseInfo, InputRates, FusionRates, NodeStatuses, NodeRateEntry, NodeStatusPayload, McpStatus, LogEntry, NodeConsoleEntry } from '../api/types';
 import type { NodeTypeDefinition, UiExtension } from '../types/nodes';
 
 interface AppState {
@@ -76,6 +76,10 @@ interface AppState {
   logEntries: LogEntry[];
   addLogEntries: (entries: LogEntry[]) => void;
   clearLogEntries: () => void;
+
+  // Node console logs
+  nodeConsoleLogs: Record<string, NodeConsoleEntry[]>;
+  clearNodeConsoleLogs: (nodeKey?: string) => void;
 
   // License
   license: {
@@ -215,6 +219,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { paused: p, nodes } = payload;
     const prev = get().nodeStatuses;
     const rates: Record<string, NodeRateEntry> = {};
+    const consoleLogs = { ...get().nodeConsoleLogs };
+    const MAX_PER_NODE = 500;
     for (const [key, entry] of Object.entries(nodes)) {
       const pr = prev[key];
       if (pr) {
@@ -227,8 +233,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         rates[key] = { inputRate: 0, outputRate: 0 };
       }
+      if (entry.logs && entry.logs.length > 0) {
+        const existing = consoleLogs[key] || [];
+        const combined = existing.concat(entry.logs);
+        consoleLogs[key] = combined.length > MAX_PER_NODE
+          ? combined.slice(-MAX_PER_NODE) : combined;
+      }
     }
-    set({ paused: p, nodeStatuses: nodes, nodeRates: rates });
+    set({ paused: p, nodeStatuses: nodes, nodeRates: rates, nodeConsoleLogs: consoleLogs });
   },
   restart: async () => {
     try { await apiPost('/api/restart'); } catch {}
@@ -260,6 +272,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearOscilloscopeData: () => set({ oscilloscopeData: { t: [], v: [] } }),
   oscilloscopeTypes: [],
   setOscilloscopeTypes: (types) => set({ oscilloscopeTypes: types }),
+
+  // Node console logs
+  nodeConsoleLogs: {},
+  clearNodeConsoleLogs: (nodeKey) => set((s) => {
+    if (nodeKey) {
+      const logs = { ...s.nodeConsoleLogs };
+      delete logs[nodeKey];
+      return { nodeConsoleLogs: logs };
+    }
+    return { nodeConsoleLogs: {} };
+  }),
 
   // Logs
   logEntries: [],

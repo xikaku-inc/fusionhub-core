@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
@@ -10,8 +10,6 @@ import type { EditorNode } from '../../types/nodes';
 interface OscilloscopePanelProps {
   edge: Edge;
   nodes: Node[];
-  onClose: () => void;
-  height?: number;
 }
 
 interface DetectedType {
@@ -19,7 +17,7 @@ interface DetectedType {
   fields: string[];
 }
 
-export default function OscilloscopePanel({ edge, nodes, onClose, height }: OscilloscopePanelProps) {
+export default function OscilloscopePanel({ edge, nodes }: OscilloscopePanelProps) {
   const [resolvedType, setResolvedType] = useState('');
   const [fields, setFields] = useState<string[]>([]);
   const [selectedField, setSelectedField] = useState('');
@@ -171,16 +169,10 @@ export default function OscilloscopePanel({ edge, nodes, onClose, height }: Osci
     return () => clearInterval(id);
   }, []);
 
-  const handleClose = useCallback(() => {
-    apiPost('/api/oscilloscope/stop');
-    clearBuffer();
-    onClose();
-  }, [onClose]);
-
   const typeList = isDynamic ? storeTypes : [];
 
   return (
-    <div className="oscilloscope-panel" style={height ? { height } : undefined}>
+    <div className="oscilloscope-panel">
       <div className="oscilloscope-header">
         {isDynamic && typeList.length >= 1 ? (
           <select
@@ -207,9 +199,6 @@ export default function OscilloscopePanel({ edge, nodes, onClose, height }: Osci
         </select>
         {loading && <span className="oscilloscope-warn">Detecting...</span>}
         {!endpoint && <span className="oscilloscope-warn">No endpoint</span>}
-        <button className="oscilloscope-close" onClick={handleClose}>
-          &times;
-        </button>
       </div>
       <div className="oscilloscope-chart" ref={chartRef} />
     </div>

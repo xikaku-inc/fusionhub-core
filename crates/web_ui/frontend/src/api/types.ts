@@ -95,6 +95,12 @@ export interface FusionRates {
   nOptical: number;
 }
 
+export interface NodeConsoleEntry {
+  ts: string;
+  level: string;
+  message: string;
+}
+
 export interface NodeStatusEntry {
   displayName: string;
   role: 'source' | 'filter' | 'sink';
@@ -103,6 +109,7 @@ export interface NodeStatusEntry {
   inputCount: number;
   outputCount: number;
   nodeStatus: Record<string, any> | null;
+  logs?: NodeConsoleEntry[];
 }
 
 export type NodeStatuses = Record<string, NodeStatusEntry>;

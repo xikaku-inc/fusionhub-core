@@ -21,7 +21,7 @@ pub fn collect_node_statuses(nodes: &[NodeRef]) -> Value {
             Ok(n) => (n.is_enabled(), n.status()),
             Err(_) => (false, Value::Null),
         };
-        let entry = json!({
+        let mut entry = json!({
             "displayName": info.display_name,
             "role": info.role,
             "color": info.color,
@@ -30,6 +30,10 @@ pub fn collect_node_statuses(nodes: &[NodeRef]) -> Value {
             "outputCount": info.connected_node.output_count(),
             "nodeStatus": node_status,
         });
+        let logs = fusion_registry::drain_node_logs(&info.config_key);
+        if !logs.is_empty() {
+            entry["logs"] = json!(logs);
+        }
         statuses.insert(info.config_key.clone(), entry);
     }
     Value::Object(statuses)
