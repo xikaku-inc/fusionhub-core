@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,6 +44,9 @@ struct ServerState {
     license_key: String,
     license_server_url: String,
     paused: Arc<AtomicBool>,
+    /// Bumped on every new browser SSE connection so the status poller
+    /// can detect reconnects and re-send buffered node logs.
+    browser_sse_generation: Arc<AtomicUsize>,
     oscilloscope_task: Option<tokio::task::JoinHandle<()>>,
     discovery_task: Option<tokio::task::JoinHandle<()>>,
 }
@@ -122,6 +125,7 @@ impl WebUiServer {
             license_key,
             license_server_url,
             paused,
+            browser_sse_generation: Arc::new(AtomicUsize::new(0)),
             oscilloscope_task: None,
             discovery_task: None,
         }));
@@ -413,6 +417,10 @@ impl WebUiServer {
 
     pub async fn sse_sender(&self) -> broadcast::Sender<String> {
         self.state.lock().await.sse_tx.clone()
+    }
+
+    pub async fn browser_sse_generation(&self) -> Arc<AtomicUsize> {
+        self.state.lock().await.browser_sse_generation.clone()
     }
 
     pub async fn paused_flag(&self) -> Arc<AtomicBool> {
@@ -1165,13 +1173,15 @@ async fn sse_handler(
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let rx = {
         let s = state.lock().await;
+        // Bump generation so the status poller resets drain cursors
+        // and re-sends all buffered node logs to this new client.
+        s.browser_sse_generation.fetch_add(1, Ordering::Relaxed);
         s.sse_tx.subscribe()
     };
 
     let stream = BroadcastStream::new(rx).filter_map(|result| {
         match result {
             Ok(msg) => {
-                // Parse the JSON to extract event type
                 if let Ok(parsed) = serde_json::from_str::<Value>(&msg) {
                     let event_type = parsed
                         .get("type")
@@ -1186,7 +1196,7 @@ async fn sse_handler(
                     Some(Ok(Event::default().data(msg)))
                 }
             }
-            Err(_) => None, // Lagged — skip
+            Err(_) => None,
         }
     });
 

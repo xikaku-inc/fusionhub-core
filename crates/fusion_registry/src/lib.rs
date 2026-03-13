@@ -327,6 +327,14 @@ pub fn drain_node_logs(config_key: &str) -> Vec<NodeLogEntry> {
     }
 }
 
+/// Reset drain cursors so the next drain re-sends all buffered entries.
+pub fn reset_all_drain_cursors() {
+    let reg = node_log_registry().lock().unwrap();
+    for buf in reg.values() {
+        buf.lock().unwrap().drain_cursor = 0;
+    }
+}
+
 /// Clear all node log buffers (call on engine restart).
 pub fn clear_all_node_logs() {
     let reg = node_log_registry().lock().unwrap();
