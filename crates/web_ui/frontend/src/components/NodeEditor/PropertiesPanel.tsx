@@ -75,10 +75,11 @@ function SettingsFieldInput({ field, value, onChange }: { field: SettingsField; 
       const str = typeof value === 'string' ? value : JSON.stringify(value ?? field.default ?? {}, null, 2);
       return (
         <textarea
+          key={str}
           style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 80, resize: 'vertical' }}
-          value={str}
-          onChange={(e) => {
-            try { onChange(JSON.parse(e.target.value)); } catch { /* keep raw string */ }
+          defaultValue={str}
+          onBlur={(e) => {
+            try { onChange(JSON.parse(e.target.value)); } catch { /* keep text for user to fix */ }
           }}
         />
       );
@@ -213,16 +214,26 @@ export default function PropertiesPanel({ node, onUpdateNode }: Props) {
           <>
             <div className="prop-divider" />
             <div className="prop-section-title">Settings</div>
-            {allFields.map((field) => (
-              <div key={field.key} className="prop-section">
-                {field.type !== 'boolean' && <div className="prop-label">{field.label}</div>}
-                <SettingsFieldInput
-                  field={field}
-                  value={getSettingValue(field.key)}
-                  onChange={(v) => updateSetting(field.key, v)}
-                />
-              </div>
-            ))}
+            {allFields.map((field) => {
+              if (field.type === 'heading') {
+                return (
+                  <div key={field.key}>
+                    <div className="prop-divider" />
+                    <div className="prop-section-title">{field.label}</div>
+                  </div>
+                );
+              }
+              return (
+                <div key={field.key} className="prop-section">
+                  {field.type !== 'boolean' && <div className="prop-label">{field.label}</div>}
+                  <SettingsFieldInput
+                    field={field}
+                    value={getSettingValue(field.key)}
+                    onChange={(v) => updateSetting(field.key, v)}
+                  />
+                </div>
+              );
+            })}
           </>
         )}
       </div>

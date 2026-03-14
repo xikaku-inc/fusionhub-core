@@ -9,7 +9,7 @@ export type DataType =
 export interface SettingsField {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'quaternion' | 'vector3' | 'json' | 'filepath';
+  type: 'string' | 'number' | 'boolean' | 'quaternion' | 'vector3' | 'json' | 'filepath' | 'heading';
   default: any;
 }
 
