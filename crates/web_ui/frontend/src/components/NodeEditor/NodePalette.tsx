@@ -34,9 +34,15 @@ export default function NodePalette() {
               >
                 <span className="palette-item-name">{nt.displayName}</span>
                 <span className="palette-item-io">
-                  {nt.inputs.length > 0 && <span className="palette-inputs">{nt.inputs.join(', ')}</span>}
-                  {nt.inputs.length > 0 && nt.outputs.length > 0 && ' → '}
-                  {nt.outputs.length > 0 && <span className="palette-outputs">{nt.outputs.join(', ')}</span>}
+                  {nt.role === 'sink' && nt.inputs.length === 0 ? (
+                    <span className="palette-inputs">Any</span>
+                  ) : (
+                    <>
+                      {nt.inputs.length > 0 && <span className="palette-inputs">{nt.inputs.join(', ')}</span>}
+                      {nt.inputs.length > 0 && nt.outputs.length > 0 && ' → '}
+                      {nt.outputs.length > 0 && <span className="palette-outputs">{nt.outputs.join(', ')}</span>}
+                    </>
+                  )}
                 </span>
               </div>
             ))}
