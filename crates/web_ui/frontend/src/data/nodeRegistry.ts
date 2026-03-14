@@ -20,15 +20,20 @@ function rebuildAliasIndex(types: NodeTypeDefinition[]) {
   }
 }
 
+// Strip numeric instance suffix (e.g. "mapSink_1" -> "mapSink")
+function stripInstanceSuffix(key: string): string {
+  return key.replace(/_\d+$/, '');
+}
+
 export function findNodeType(key: string): NodeTypeDefinition | undefined {
   const types = getNodeRegistry();
   rebuildAliasIndex(types);
-  return aliasIndex.get(key);
+  return aliasIndex.get(key) || aliasIndex.get(stripInstanceSuffix(key));
 }
 
 export function isFilterKey(key: string): boolean {
   const types = getNodeRegistry();
   rebuildAliasIndex(types);
-  const def = aliasIndex.get(key);
+  const def = aliasIndex.get(key) || aliasIndex.get(stripInstanceSuffix(key));
   return def?.role === 'filter';
 }

@@ -7,6 +7,7 @@ export function useSSE() {
   const prevInputRef = useRef<{ status: InputStatus | null; time: number }>({ status: null, time: 0 });
   const prevFusionRef = useRef<{ status: FusionStatus | null; time: number }>({ status: null, time: 0 });
   const throttleRef = useRef<{ fusedPose: number; optical: number; vehiclePose: number }>({ fusedPose: 0, optical: 0, vehiclePose: 0 });
+  const mapSinkThrottleRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const es = new EventSource('/api/events');
@@ -99,10 +100,19 @@ export function useSSE() {
 
         case 'fusedVehiclePose': {
           const now = Date.now();
-          if (now - throttleRef.current.vehiclePose < 50) break;
-          throttleRef.current.vehiclePose = now;
           const vp = data.fusedVehiclePose || data.fusedVehiclePoseV2 || data;
-          state.setFusedVehiclePose(vp);
+          const sinkId = data.sinkId;
+          if (sinkId) {
+            const lastTime = mapSinkThrottleRef.current[sinkId] || 0;
+            if (now - lastTime >= 50) {
+              mapSinkThrottleRef.current[sinkId] = now;
+              state.setMapSinkData(sinkId, vp);
+            }
+          }
+          if (now - throttleRef.current.vehiclePose >= 50) {
+            throttleRef.current.vehiclePose = now;
+            state.setFusedVehiclePose(vp);
+          }
           break;
         }
 

@@ -35,12 +35,14 @@ interface AppState {
   intercalibrationStatus: IntercalibrationStatus;
   fusedPose: FusedPose;
   fusedVehiclePose: FusedVehiclePose;
+  mapSinkData: Record<string, FusedVehiclePose>;
   opticalData: OpticalData;
   setStatus: (s: FusionStatus) => void;
   setInputStatus: (s: InputStatus) => void;
   setIntercalibrationStatus: (s: IntercalibrationStatus) => void;
   setFusedPose: (p: FusedPose) => void;
   setFusedVehiclePose: (p: FusedVehiclePose) => void;
+  setMapSinkData: (sinkId: string, p: FusedVehiclePose) => void;
   setOpticalData: (d: OpticalData) => void;
 
   // Rates
@@ -197,12 +199,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   intercalibrationStatus: defaultIntercalibrationStatus,
   fusedPose: {},
   fusedVehiclePose: {},
+  mapSinkData: {},
   opticalData: {},
   setStatus: (s) => set({ status: s }),
   setInputStatus: (s) => set({ inputStatus: s }),
   setIntercalibrationStatus: (s) => set({ intercalibrationStatus: s }),
   setFusedPose: (p) => set({ fusedPose: p }),
   setFusedVehiclePose: (p) => set({ fusedVehiclePose: p }),
+  setMapSinkData: (sinkId, p) => set((s) => ({
+    mapSinkData: { ...s.mapSinkData, [sinkId]: p },
+  })),
   setOpticalData: (d) => set({ opticalData: d }),
 
   // Rates

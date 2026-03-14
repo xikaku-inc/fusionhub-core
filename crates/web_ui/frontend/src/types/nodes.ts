@@ -38,7 +38,9 @@ export interface UiExtension {
   route: string;
   navSection: string;
   requiredNodes?: string[];
-  component?: React.ComponentType;
+  component?: React.ComponentType<any>;
+  bundleId?: string;
+  instanceKey?: string;
 }
 
 export interface EditorNode extends Record<string, unknown> {
