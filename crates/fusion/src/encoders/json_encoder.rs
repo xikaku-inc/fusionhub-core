@@ -31,6 +31,7 @@ impl JsonEncoder {
             StreamableData::VelocityMeter(d) => ("VelocityMeterData", serde_json::to_value(d)?),
             StreamableData::Timestamp(d) => ("Timestamp", serde_json::to_value(d)?),
             StreamableData::Extension(_) => unreachable!(),
+            StreamableData::Reset => ("Reset", serde_json::Value::Object(Default::default())),
         };
         let wrapper = serde_json::json!({ wrapper_key: inner });
         serde_json::to_string(&wrapper).context("Failed to encode StreamableData to JSON")
@@ -59,6 +60,7 @@ impl JsonEncoder {
             StreamableData::VelocityMeter(d) => ("VelocityMeterData", serde_json::to_value(d)?),
             StreamableData::Timestamp(d) => ("Timestamp", serde_json::to_value(d)?),
             StreamableData::Extension(_) => unreachable!(),
+            StreamableData::Reset => ("Reset", serde_json::Value::Object(Default::default())),
         };
         let wrapper = serde_json::json!({ wrapper_key: inner });
         serde_json::to_string_pretty(&wrapper)

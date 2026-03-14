@@ -175,7 +175,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           configKey,
           nodeType,
           subtype: cfg.type,
-          settings: cfg.settings || {},
+          settings: cfg.settings || cfg.fuser || {},
           endpoint,
           disabled: false,
           originalConfig: cfg,

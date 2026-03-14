@@ -1117,6 +1117,8 @@ pub enum StreamableData {
     VelocityMeter(VelocityMeterData),
     Timestamp(Timestamp),
     Extension(ExtensionEnvelope),
+    /// Signal downstream nodes to reset their state (e.g. on playback restart).
+    Reset,
 }
 
 impl StreamableData {
@@ -1138,6 +1140,7 @@ impl StreamableData {
             Self::VelocityMeter(_) => "VelocityMeter",
             Self::Timestamp(_) => "Timestamp",
             Self::Extension(_) => "Extension",
+            Self::Reset => "Reset",
         }
     }
 
@@ -1165,7 +1168,7 @@ impl StreamableData {
             Self::VehicleState(d) => Some(&d.sender_id),
             Self::VehicleSpeed(d) => Some(&d.sender_id),
             Self::VelocityMeter(d) => Some(&d.sender_id),
-            Self::Timestamp(_) => None,
+            Self::Timestamp(_) | Self::Reset => None,
             Self::Extension(e) => Some(&e.sender_id),
         }
     }
@@ -1186,7 +1189,7 @@ impl StreamableData {
             Self::VehicleState(d) => d.sender_id = id.to_owned(),
             Self::VehicleSpeed(d) => d.sender_id = id.to_owned(),
             Self::VelocityMeter(d) => d.sender_id = id.to_owned(),
-            Self::Timestamp(_) => {}
+            Self::Timestamp(_) | Self::Reset => {}
             Self::Extension(e) => e.sender_id = id.to_owned(),
         }
     }
@@ -1209,6 +1212,7 @@ impl StreamableData {
             Self::VelocityMeter(d) => Some(d.timestamp),
             Self::Timestamp(t) => Some(t.now),
             Self::Extension(e) => Some(e.timestamp),
+            Self::Reset => None,
         }
     }
 
@@ -1230,6 +1234,7 @@ impl StreamableData {
             Self::VelocityMeter(d) => d.timestamp = ts,
             Self::Timestamp(t) => t.now = ts,
             Self::Extension(e) => e.timestamp = ts,
+            Self::Reset => {}
         }
     }
 

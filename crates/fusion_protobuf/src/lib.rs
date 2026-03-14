@@ -165,6 +165,9 @@ impl ProtobufEncoder {
             StreamableData::Timestamp(_) => {
                 sd.sequence_number = self.next_seq();
             }
+            StreamableData::Reset => {
+                return Vec::new();
+            }
             StreamableData::Extension(e) => {
                 sd.sequence_number = self.next_seq();
                 let payload = encode_extension_proto(&e.type_name, e.payload_any())

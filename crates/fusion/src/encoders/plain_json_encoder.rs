@@ -56,6 +56,7 @@ impl PlainJsonEncoder {
                     .unwrap_or(serde_json::Value::Null);
                 serde_json::to_string(&payload).context("Failed to encode Extension")
             }
+            StreamableData::Reset => Ok("{}".to_string()),
         }
     }
 
@@ -91,6 +92,7 @@ impl PlainJsonEncoder {
                     .unwrap_or(serde_json::Value::Null);
                 serde_json::to_string_pretty(&payload).context("encode")
             }
+            StreamableData::Reset => Ok("{}".to_string()),
         }
     }
 
@@ -112,6 +114,7 @@ impl PlainJsonEncoder {
             StreamableData::VelocityMeter(_) => "VelocityMeterData",
             StreamableData::Timestamp(_) => "Timestamp",
             StreamableData::Extension(_) => "Extension",
+            StreamableData::Reset => "Reset",
         }
     }
 }

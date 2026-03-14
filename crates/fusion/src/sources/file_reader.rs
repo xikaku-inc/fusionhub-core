@@ -217,6 +217,12 @@ impl Node for FileReaderSource {
                     }
 
                     log::info!("FileReader: looping, restarting playback...");
+                    // Signal downstream nodes to reset their state
+                    let cbs = consumers.lock().unwrap();
+                    for cb in cbs.iter() {
+                        cb(fusion_types::StreamableData::Reset);
+                    }
+                    drop(cbs);
                 }
             })
             .await;

@@ -105,7 +105,9 @@ export function graphToConfig(nodes: Node[], edges: Edge[], globalSettings: any)
     }
 
     if (d.settings && Object.keys(d.settings).length > 0) {
-      nodeConfig.settings = d.settings;
+      // Preserve original config key ("fuser" vs "settings")
+      const settingsKey = d.originalConfig?.fuser && !d.originalConfig?.settings ? 'fuser' : 'settings';
+      nodeConfig[settingsKey] = d.settings;
     }
 
     // If connected to an external output node, use its endpoint as dataEndpoint

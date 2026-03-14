@@ -200,7 +200,7 @@ impl DataMonitor {
             StreamableData::VehicleSpeed(d) => (d.sender_id.clone(), "VehicleSpeed"),
             StreamableData::VelocityMeter(d) => (d.sender_id.clone(), "VelocityMeter"),
             StreamableData::Extension(e) => (e.sender_id.clone(), "Extension"),
-            StreamableData::Timestamp(_) => return,
+            StreamableData::Timestamp(_) | StreamableData::Reset => return,
         };
 
         let key = format!("{}:{}", sender_id, data_type);
