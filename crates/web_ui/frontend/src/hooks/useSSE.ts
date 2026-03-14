@@ -17,10 +17,7 @@ export function useSSE() {
       useAppStore.getState().fetchLicenseStatus();
     };
     es.onerror = () => {
-      // Only mark disconnected if the connection is permanently closed
-      if (es.readyState === EventSource.CLOSED) {
-        useAppStore.getState().setSseConnected(false);
-      }
+      useAppStore.getState().setSseConnected(false);
     };
 
     function handle(type: string, data: any) {
