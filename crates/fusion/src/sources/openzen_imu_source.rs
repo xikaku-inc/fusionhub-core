@@ -105,7 +105,12 @@ impl Node for OpenZenImuSource {
     }
 
     fn start(&mut self) -> anyhow::Result<()> {
-        log::info!("Starting OpenZen IMU source: {}", self.base.name());
+        log::info!(
+            "[{}] Starting OpenZen IMU source (sensor='{}', autodetect='{}')",
+            self.base.name(),
+            if self.m_sensor_name.is_empty() { "<auto>" } else { &self.m_sensor_name },
+            self.m_autodetect_type
+        );
 
         let done = self.m_done.clone();
         let consumers = self.base.consumers_arc();
@@ -117,18 +122,21 @@ impl Node for OpenZenImuSource {
         let id = self.m_id.clone();
         let on_device_autocal = self.m_on_device_autocalibration;
         let connected_sensor = self.m_connected_sensor.clone();
+        let node_name = self.base.name().to_owned();
 
         done.store(false, Ordering::Relaxed);
 
         self.m_worker_handle = Some(tokio::spawn(async move {
+            let node_name_outer = node_name.clone();
             let result = tokio::task::spawn_blocking(move || {
                 // 1. Initialize client -------------------------------------------
                 let mut client_handle = ZenClientHandle_t { handle: 0 };
                 let err = unsafe { ZenInit(&mut client_handle) };
                 if err != ZenError_None {
-                    log::error!("ZenInit failed with error {}", err);
+                    log::error!("[{}] OpenZen init failed (error={})", node_name, err);
                     return;
                 }
+                log::info!("[{}] OpenZen initialized, searching for sensors...", node_name);
 
                 // Ensure cleanup on all exit paths.
                 struct ClientGuard {
@@ -146,7 +154,7 @@ impl Node for OpenZenImuSource {
                 // 2. Discover sensors --------------------------------------------
                 let err = unsafe { ZenListSensorsAsync(client_handle) };
                 if err != ZenError_None {
-                    log::error!("ZenListSensorsAsync failed with error {}", err);
+                    log::error!("[{}] ZenListSensorsAsync failed (error={})", node_name, err);
                     return;
                 }
 
@@ -160,7 +168,7 @@ impl Node for OpenZenImuSource {
                     let ok = unsafe { ZenWaitForNextEvent(client_handle, &mut event) };
                     if !ok {
                         // ZenWaitForNextEvent returns false when ZenShutdown is called.
-                        log::info!("ZenWaitForNextEvent returned false (shutdown)");
+                        log::info!("[{}] ZenWaitForNextEvent returned false (shutdown)", node_name);
                         return;
                     }
                     #[allow(non_upper_case_globals)]
@@ -168,9 +176,8 @@ impl Node for OpenZenImuSource {
                         ZenEventType_SensorFound => {
                             let desc = unsafe { event.data.sensorFound };
                             log::info!(
-                                "Discovered sensor: name='{}' serial='{}'",
-                                desc.name_str(),
-                                desc.serial_number_str()
+                                "[{}] Discovered sensor: name='{}' serial='{}'",
+                                node_name, desc.name_str(), desc.serial_number_str()
                             );
                             discovered.push(desc);
                         }
@@ -185,8 +192,8 @@ impl Node for OpenZenImuSource {
                 }
 
                 log::info!(
-                    "Found {} devices that might be LP IMUs",
-                    discovered.len()
+                    "[{}] Found {} devices that might be LP IMUs",
+                    node_name, discovered.len()
                 );
 
                 // 3. Find matching sensor ----------------------------------------
@@ -209,17 +216,16 @@ impl Node for OpenZenImuSource {
                     Some(d) => *d,
                     None => {
                         log::warn!(
-                            "Could not find matching sensor (name='{}', autodetect='{}')",
-                            sensor_name,
-                            autodetect_type
+                            "[{}] Could not find matching sensor (name='{}', autodetect='{}')",
+                            node_name, sensor_name, autodetect_type
                         );
                         return;
                     }
                 };
 
                 let sensor_display = format!("{} ({})", desc.name_str(), desc.serial_number_str());
-                log::info!("Connecting to sensor: {}", sensor_display);
-                *connected_sensor.lock().unwrap() = sensor_display;
+                log::info!("[{}] Attempting to connect to sensor: {}", node_name, sensor_display);
+                *connected_sensor.lock().unwrap() = sensor_display.clone();
 
                 // 4. Obtain sensor -----------------------------------------------
                 let mut sensor_handle = ZenSensorHandle_t { handle: 0 };
@@ -233,15 +239,15 @@ impl Node for OpenZenImuSource {
                         break;
                     }
                     log::warn!(
-                        "ZenObtainSensor attempt {} failed with error {}",
-                        attempt + 1,
-                        err
+                        "[{}] ZenObtainSensor attempt {} failed (error={})",
+                        node_name, attempt + 1, err
                     );
                 }
                 if !obtained {
-                    log::error!("Failed to obtain sensor after 3 attempts");
+                    log::error!("[{}] Failed to connect to sensor after 3 attempts", node_name);
                     return;
                 }
+                log::info!("[{}] Successfully connected to sensor: {}", node_name, sensor_display);
 
                 // Ensure sensor is released on exit.
                 struct SensorGuard {
@@ -274,7 +280,7 @@ impl Node for OpenZenImuSource {
                     )
                 };
                 if err != ZenError_None || count == 0 || components_ptr.is_null() {
-                    log::error!("Sensor has no IMU component (error={})", err);
+                    log::error!("[{}] Sensor has no IMU component (error={})", node_name, err);
                     return;
                 }
                 let component_handle = unsafe { *components_ptr };
@@ -314,13 +320,12 @@ impl Node for OpenZenImuSource {
                 };
                 if err != ZenError_None {
                     log::warn!(
-                        "Failed to set sampling rate to {} Hz (error={})",
-                        actual_freq,
-                        err
+                        "[{}] Failed to set sampling rate to {} Hz (error={})",
+                        node_name, actual_freq, err
                     );
                 }
                 let interval = 1.0 / actual_freq as f64;
-                log::info!("Sampling interval set to {:.6}s ({}Hz)", interval, actual_freq);
+                log::info!("[{}] Sampling interval set to {:.6}s ({}Hz)", node_name, interval, actual_freq);
 
                 // On-device gyroscope autocalibration
                 if on_device_autocal {
@@ -334,9 +339,9 @@ impl Node for OpenZenImuSource {
                         )
                     };
                     if err != ZenError_None {
-                        log::warn!("Failed to enable on-device gyro autocalibration (error={})", err);
+                        log::warn!("[{}] Failed to enable on-device gyro autocalibration (error={})", node_name, err);
                     } else {
-                        log::info!("On-device gyroscope autocalibration enabled");
+                        log::info!("[{}] On-device gyroscope autocalibration enabled", node_name);
                     }
                 }
 
@@ -350,7 +355,7 @@ impl Node for OpenZenImuSource {
                         true,
                     )
                 };
-                log::info!("OpenZen sensor configured and streaming");
+                log::info!("[{}] OpenZen sensor configured and streaming", node_name);
 
                 // 7. Event loop --------------------------------------------------
                 let mut first_frame_time: Option<SystemTime> = None;
@@ -361,7 +366,7 @@ impl Node for OpenZenImuSource {
                 while !done.load(Ordering::Relaxed) {
                     // Check for timeout / reconnection need
                     if last_event_instant.elapsed() > Duration::from_secs(2) {
-                        log::warn!("No IMU data for 2 seconds, resetting timing");
+                        log::warn!("[{}] No IMU data for 2 seconds, resetting timing", node_name);
                         first_frame_time = None;
                         first_frame_count = None;
                         received_sample_count = 0;
@@ -397,9 +402,8 @@ impl Node for OpenZenImuSource {
                         first_frame_count = Some(imu.frameCount);
                         received_sample_count = 0;
                         log::info!(
-                            "IMU timing initialized: first frame {} at rate {}Hz",
-                            imu.frameCount,
-                            1.0 / interval
+                            "[{}] IMU timing initialized: first frame {} at rate {}Hz",
+                            node_name, imu.frameCount, 1.0 / interval
                         );
                         now
                     } else {
@@ -415,9 +419,8 @@ impl Node for OpenZenImuSource {
                     if let Some(ref mut first_fc) = first_frame_count {
                         if imu.frameCount < *first_fc {
                             log::info!(
-                                "IMU frame count wrapped (was {}, now {}), resetting",
-                                *first_fc,
-                                imu.frameCount
+                                "[{}] IMU frame count wrapped (was {}, now {}), resetting",
+                                node_name, *first_fc, imu.frameCount
                             );
                             *first_fc = imu.frameCount;
                         }
@@ -473,12 +476,12 @@ impl Node for OpenZenImuSource {
                     }
                 }
 
-                log::info!("OpenZen worker thread exiting");
+                log::info!("[{}] OpenZen worker thread exiting", node_name);
             })
             .await;
 
             if let Err(e) = result {
-                log::warn!("OpenZen worker thread panicked: {}", e);
+                log::warn!("[{}] OpenZen worker thread panicked: {}", node_name_outer, e);
             }
         }));
 
