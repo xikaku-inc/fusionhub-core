@@ -26,7 +26,7 @@ export default function OscilloscopePanel({ edge, nodes }: OscilloscopePanelProp
   const plotRef = useRef<uPlot | null>(null);
 
   const rawDataType = edge.sourceHandle?.replace('out-', '') || '';
-  const isDynamic = rawDataType === 'Dynamic' || rawDataType.startsWith('any');
+  const isDynamic = rawDataType === 'Dynamic' || rawDataType.toLowerCase().startsWith('any');
   const sourceNode = nodes.find((n) => n.id === edge.source);
   const endpoint = (sourceNode?.data as EditorNode)?.endpoint || '';
 

@@ -29,9 +29,11 @@ export function isValidConnection(
   // Extract data type from handle IDs
   const outputType = connection.sourceHandle?.replace('out-', '');
   const inputType = connection.targetHandle?.replace('in-', '');
+  const outLower = outputType?.toLowerCase();
+  const inLower = inputType?.toLowerCase();
 
-  // "any" handles (including numbered any-0, any-1, ...) accept/produce everything
-  if (inputType?.startsWith('any') || outputType?.startsWith('any')) return true;
+  // "any"/"Any" handles (including numbered any-0, any-1, ...) accept/produce everything
+  if (inLower?.startsWith('any') || outLower?.startsWith('any')) return true;
 
   // ext handles are universal connectors (external TCP endpoints)
   if (outputType === 'ext' || inputType === 'ext') return true;
