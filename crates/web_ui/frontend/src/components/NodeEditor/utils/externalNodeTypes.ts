@@ -2,9 +2,9 @@ import type { NodeTypeDefinition } from '../../../types/nodes';
 
 export const EXTERNAL_INPUT_TYPE: NodeTypeDefinition = {
   id: '_external_input',
-  displayName: 'External Input',
+  displayName: 'TCP Input',
   role: 'source',
-  outputs: [],
+  outputs: ['Any'],
   inputs: [],
   defaultSettings: {},
   settingsSchema: [],
@@ -14,10 +14,10 @@ export const EXTERNAL_INPUT_TYPE: NodeTypeDefinition = {
 
 export const EXTERNAL_OUTPUT_TYPE: NodeTypeDefinition = {
   id: '_external_output',
-  displayName: 'External Output',
+  displayName: 'TCP Output',
   role: 'sink',
   outputs: [],
-  inputs: [],
+  inputs: ['Any'],
   defaultSettings: {},
   settingsSchema: [],
   configAliases: [],

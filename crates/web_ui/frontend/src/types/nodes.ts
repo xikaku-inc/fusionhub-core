@@ -4,7 +4,8 @@ export type DataType =
   | 'Imu' | 'Gnss' | 'Optical' | 'FusedPose'
   | 'FusedVehiclePose' | 'FusedVehiclePoseV2' | 'GlobalFusedPose'
   | 'FusionStateInt' | 'Rtcm' | 'Can'
-  | 'VehicleState' | 'VehicleSpeed' | 'VelocityMeter';
+  | 'VehicleState' | 'VehicleSpeed' | 'VelocityMeter'
+  | 'Any';
 
 export interface SettingsField {
   key: string;

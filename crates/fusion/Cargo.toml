@@ -22,6 +22,7 @@ hidapi = { workspace = true }
 openzen-sys = { path = "../openzen-sys" }
 socket2 = { workspace = true }
 flate2 = { workspace = true }
+rhai = { workspace = true }
 fusion_types = { path = "../fusion_types" }
 fusion_registry = { path = "../fusion_registry" }
 fusion_protobuf = { path = "../fusion_protobuf" }

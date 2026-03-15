@@ -208,6 +208,8 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                   });
                 }
               } else {
+                // One edge per endpoint connection (pick first matching type)
+                let matched = false;
                 for (const outType of source.outputs) {
                   if (nodeType.inputs.includes(outType)) {
                     edges.push({
@@ -218,10 +220,12 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                       targetHandle: `in-${outType}`,
                       animated: false,
                     });
+                    matched = true;
+                    break;
                   }
                 }
                 // Fallback: external input nodes have empty outputs, create untyped edge
-                if (source.outputs.length === 0) {
+                if (!matched && source.outputs.length === 0) {
                   edges.push({
                     id: `e-${source.nodeId}-${nodeId}-ext`,
                     source: source.nodeId,
@@ -229,7 +233,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                     sourceHandle: 'out-ext',
                     targetHandle: nodeType.inputs.length > 0 ? `in-${nodeType.inputs[0]}` : 'in-any',
                   });
-                } else if (!source.outputs.some((o) => nodeType.inputs.includes(o))) {
+                } else if (!matched && !source.outputs.some((o) => nodeType.inputs.includes(o))) {
                   edges.push({
                     id: `e-${source.nodeId}-${nodeId}`,
                     source: source.nodeId,
@@ -317,6 +321,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
           targetHandle: targetNodeType.inputs.length > 0 ? `in-${targetNodeType.inputs[0]}` : 'in-any',
         });
       } else {
+        let matched = false;
         for (const outType of source.outputs) {
           if (targetNodeType.inputs.includes(outType)) {
             edges.push({
@@ -326,9 +331,11 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
               sourceHandle: `out-${outType}`,
               targetHandle: `in-${outType}`,
             });
+            matched = true;
+            break;
           }
         }
-        if (!source.outputs.some((o) => targetNodeType.inputs.includes(o))) {
+        if (!matched) {
           edges.push({
             id: `e-${source.nodeId}-${deferred.nodeId}`,
             source: source.nodeId,
@@ -407,6 +414,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                 targetHandle: hasSpecificInputs ? `in-${nodeType.inputs[0]}` : 'in-any',
               });
             } else {
+              // One edge per endpoint connection (pick first matching type)
               for (const outType of source.outputs) {
                 if (!hasSpecificInputs || nodeType.inputs.includes(outType)) {
                   edges.push({
@@ -416,6 +424,7 @@ export function configToGraph(config: any): { nodes: Node[]; edges: Edge[] } {
                     sourceHandle: `out-${outType}`,
                     targetHandle: hasSpecificInputs ? `in-${outType}` : 'in-any',
                   });
+                  break;
                 }
               }
             }

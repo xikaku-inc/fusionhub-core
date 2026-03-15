@@ -49,8 +49,8 @@ pub fn register_core_nodes() {
             description: None,
             role: NodeRole::Filter,
             config_aliases: aliases(&["ExampleFilter", "exampleFilter"]),
-            inputs: vec![],
-            outputs: vec![],
+            inputs: vec!["Any".into()],
+            outputs: vec!["Any".into()],
             default_settings: json!({}),
             settings_schema: vec![],
             subtypes: None,
@@ -84,6 +84,39 @@ pub fn register_core_nodes() {
         |type_name, config| {
             let name = config.value_str("name", type_name);
             Ok(Arc::new(Mutex::new(crate::sinks::example_sink::ExampleSink::new(&name))))
+        },
+    );
+
+    // Script Filter — user-programmable filter using Rhai scripts.
+    fusion_registry::register_node(
+        NodeMetadata {
+            id: "scriptFilter".into(),
+            display_name: "Script Filter".into(),
+            description: Some(
+                "Programmable filter using Rhai scripts. Receives sensor data, \
+                 runs a user-defined script, and emits the result. Scripts can \
+                 transform, filter, or convert data between types at runtime."
+                    .into(),
+            ),
+            role: NodeRole::Filter,
+            config_aliases: aliases(&["ScriptFilter", "scriptFilter"]),
+            inputs: vec!["Any".into()],
+            outputs: vec!["Any".into()],
+            settings_schema: crate::filters::script_filter::settings_schema(),
+            default_settings: defaults_from_schema(
+                &crate::filters::script_filter::settings_schema(),
+            ),
+            subtypes: None,
+            required_feature: None,
+            supports_realtime_config: true,
+            color: FILTER_COLOR.into(),
+        },
+        |type_name, config| {
+            let settings = extract_settings(config);
+            let name = config.value_str("name", type_name);
+            Ok(Arc::new(Mutex::new(
+                crate::filters::script_filter::ScriptFilter::new(&name, settings),
+            )))
         },
     );
 

@@ -14,13 +14,18 @@ function onDragStart(event: DragEvent, nodeType: NodeTypeDefinition) {
   event.dataTransfer.effectAllowed = 'move';
 }
 
+const externalTypes = [EXTERNAL_INPUT_TYPE, EXTERNAL_OUTPUT_TYPE];
+
 export default function NodePalette() {
   const nodeTypes = useAppStore((s) => s.nodeTypes);
   return (
     <div className="node-palette">
       <div className="palette-title">Node Library</div>
       {roles.map(({ role, label }) => {
-        const types = nodeTypes.filter((n) => n.role === role);
+        const types = [
+          ...nodeTypes.filter((n) => n.role === role),
+          ...externalTypes.filter((n) => n.role === role),
+        ];
         return (
           <div key={role} className="palette-section">
             <div className="palette-section-title">{label}</div>
@@ -49,31 +54,6 @@ export default function NodePalette() {
           </div>
         );
       })}
-      <div className="palette-section">
-        <div className="palette-section-title">External</div>
-        <div
-          className="palette-item"
-          style={{ borderLeftColor: EXTERNAL_INPUT_TYPE.color }}
-          draggable
-          onDragStart={(e) => onDragStart(e, EXTERNAL_INPUT_TYPE)}
-        >
-          <span className="palette-item-name">TCP Input</span>
-          <span className="palette-item-io">
-            <span className="palette-outputs">ext</span>
-          </span>
-        </div>
-        <div
-          className="palette-item"
-          style={{ borderLeftColor: EXTERNAL_OUTPUT_TYPE.color }}
-          draggable
-          onDragStart={(e) => onDragStart(e, EXTERNAL_OUTPUT_TYPE)}
-        >
-          <span className="palette-item-name">TCP Output</span>
-          <span className="palette-item-io">
-            <span className="palette-inputs">ext</span>
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

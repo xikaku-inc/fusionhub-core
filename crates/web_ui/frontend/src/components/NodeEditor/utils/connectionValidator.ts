@@ -30,8 +30,8 @@ export function isValidConnection(
   const outputType = connection.sourceHandle?.replace('out-', '');
   const inputType = connection.targetHandle?.replace('in-', '');
 
-  // "any" handle on sinks accepts everything
-  if (inputType === 'any') return true;
+  // "any" handles (including numbered any-0, any-1, ...) accept/produce everything
+  if (inputType?.startsWith('any') || outputType?.startsWith('any')) return true;
 
   // ext handles are universal connectors (external TCP endpoints)
   if (outputType === 'ext' || inputType === 'ext') return true;
@@ -39,8 +39,8 @@ export function isValidConnection(
   // Dynamic output connects to any input
   if (outputType === 'Dynamic') return true;
 
-  // Sinks with no specific inputs accept any
-  if (targetData.nodeType.role === 'sink' && targetData.nodeType.inputs.length === 0) {
+  // Nodes with no specific inputs accept any
+  if (targetData.nodeType.inputs.length === 0) {
     return true;
   }
 
