@@ -347,7 +347,8 @@ h3:first-child { margin-top: 0; }
 /* 3D View */
 .three-container {
     width: 100%;
-    height: 500px;
+    flex: 1;
+    min-height: 300px;
     background: #888;
     border-radius: var(--radius);
     overflow: hidden;
@@ -404,7 +405,20 @@ h3:first-child { margin-top: 0; }
 
 /* View container */
 .view-container {
-    min-height: calc(100vh - 80px);
+    height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+}
+.view-container > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+.view-container > .card > .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Snackbar / toast */
