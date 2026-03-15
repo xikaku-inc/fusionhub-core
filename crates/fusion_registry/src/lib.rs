@@ -117,14 +117,31 @@ where
     });
 }
 
+/// Strip trailing instance suffix: numeric `_1` or named `_Gnss`.
+fn strip_instance_suffix(key: &str) -> Option<&str> {
+    if let Some(pos) = key.rfind('_') {
+        if pos > 0 && pos + 1 < key.len() {
+            return Some(&key[..pos]);
+        }
+    }
+    None
+}
+
+fn matches_key(meta: &NodeMetadata, key: &str) -> bool {
+    meta.id == key || meta.config_aliases.iter().any(|a| a == key)
+}
+
+fn find_entry<'a>(entries: &'a [NodeRegistration], key: &str) -> Option<&'a NodeRegistration> {
+    entries.iter().find(|r| matches_key(&r.metadata, key))
+        .or_else(|| strip_instance_suffix(key).and_then(|base| {
+            entries.iter().find(|r| matches_key(&r.metadata, base))
+        }))
+}
+
 pub fn build_node(type_name: &str, config: &Value) -> Result<Arc<Mutex<dyn Node>>> {
     let reg = registry().lock().unwrap();
-    for r in &reg.entries {
-        if r.metadata.id == type_name
-            || r.metadata.config_aliases.iter().any(|a| a == type_name)
-        {
-            return (r.builder)(type_name, config);
-        }
+    if let Some(r) = find_entry(&reg.entries, type_name) {
+        return (r.builder)(type_name, config);
     }
     bail!("Unknown node type: '{}'", type_name)
 }
@@ -136,37 +153,25 @@ pub fn all_metadata() -> Vec<NodeMetadata> {
 
 pub fn is_filter_key(key: &str) -> bool {
     let reg = registry().lock().unwrap();
-    reg.entries.iter().any(|r| {
-        r.metadata.role == NodeRole::Filter
-            && (r.metadata.id == key || r.metadata.config_aliases.iter().any(|a| a == key))
-    })
+    find_entry(&reg.entries, key)
+        .map_or(false, |r| r.metadata.role == NodeRole::Filter)
 }
 
 pub fn required_feature(key: &str) -> Option<String> {
     let reg = registry().lock().unwrap();
-    for r in &reg.entries {
-        if r.metadata.id == key || r.metadata.config_aliases.iter().any(|a| a == key) {
-            return r.metadata.required_feature.clone();
-        }
-    }
-    None
+    find_entry(&reg.entries, key)
+        .and_then(|r| r.metadata.required_feature.clone())
 }
 
 pub fn metadata_for_key(key: &str) -> Option<NodeMetadata> {
     let reg = registry().lock().unwrap();
-    reg.entries
-        .iter()
-        .find(|r| r.metadata.id == key || r.metadata.config_aliases.iter().any(|a| a == key))
-        .map(|r| r.metadata.clone())
+    find_entry(&reg.entries, key).map(|r| r.metadata.clone())
 }
 
 pub fn supports_realtime_config(node_key: &str) -> bool {
     let reg = registry().lock().unwrap();
-    reg.entries.iter().any(|r| {
-        r.metadata.supports_realtime_config
-            && (r.metadata.id == node_key
-                || r.metadata.config_aliases.iter().any(|a| a == node_key))
-    })
+    find_entry(&reg.entries, node_key)
+        .map_or(false, |r| r.metadata.supports_realtime_config)
 }
 
 // ---------------------------------------------------------------------------

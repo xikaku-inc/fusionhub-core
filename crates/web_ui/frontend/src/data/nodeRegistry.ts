@@ -20,18 +20,24 @@ function rebuildAliasIndex(types: NodeTypeDefinition[]) {
   }
 }
 
-// Strip numeric instance suffix (e.g. "mapSink_1" -> "mapSink")
+// Strip instance suffix: numeric (_1, _2) or named (_Gnss, _Odom)
 function stripInstanceSuffix(key: string): string {
-  return key.replace(/_\d+$/, '');
+  if (!key) return key;
+  const numStripped = key.replace(/_\d+$/, '');
+  if (numStripped !== key) return numStripped;
+  const lastUnderscore = key.lastIndexOf('_');
+  return lastUnderscore > 0 ? key.substring(0, lastUnderscore) : key;
 }
 
 export function findNodeType(key: string): NodeTypeDefinition | undefined {
+  if (!key) return undefined;
   const types = getNodeRegistry();
   rebuildAliasIndex(types);
   return aliasIndex.get(key) || aliasIndex.get(stripInstanceSuffix(key));
 }
 
 export function isFilterKey(key: string): boolean {
+  if (!key) return false;
   const types = getNodeRegistry();
   rebuildAliasIndex(types);
   const def = aliasIndex.get(key) || aliasIndex.get(stripInstanceSuffix(key));
